@@ -1,10 +1,6 @@
-
-using System;
-using System.Threading;
+﻿using System;
 using Microsoft.SPOT;
 using Microsoft.SPOT.Hardware;
-using System.Text;
-
 using CTRE.Phoenix;
 using CTRE.Phoenix.Controller;
 using CTRE.Phoenix.MotorControl;
@@ -20,6 +16,7 @@ namespace HERO_XInput_Gampad_Example
         SafeOutputPort digitalOut2 = new SafeOutputPort(CTRE.HERO.IO.Port1.Pin5, false);   //Port1, PIN 5 on Hero Board > IN1 in L298 Connected to Linear Actuator
         InputPort inputDead = new InputPort(CTRE.HERO.IO.Port6.Pin4, false, Port.ResistorMode.PullDown); //Deadman switch, Port6 Pin4 on Hero Board
         InputPort inputPressure = new InputPort(CTRE.HERO.IO.Port6.Pin5, false, Port.ResistorMode.Disabled); //Input Pressure from Pi Port 26 connected to Port6 Pin5
+        AnalogInput analogPressure = new AnalogInput(CTRE.HERO.IO.Port1.Analog_Pin3);  //Analong input pressure from Port1 Pin 3
         TalonSRX tal1 = new TalonSRX(1); //first Talon, ID = 1
         TalonSRX tal2 = new TalonSRX(2);//second Talon, ID = 2
         long solenoidPeriod; //Time to auto-shutdown solenoid valve after shooting/opening it.
@@ -69,6 +66,8 @@ namespace HERO_XInput_Gampad_Example
 
                 //Pressure Sensor
                 Boolean Pressure_Switch = inputPressure.Read(); //Input from Raspberry Pi
+                double pressure_value = analogPressure.Read();  // Pressure Value read from Analog Input (Port 1 Pin 3)
+                string pressure_string = pressure_value.ToString(); //Converted to string for debugging
                 String pressure = "Under threshold";
                 if (Pressure_Switch)
                 {
@@ -80,15 +79,16 @@ namespace HERO_XInput_Gampad_Example
                 //Compressor
                 Boolean StartCompressor = _gamepad.GetButton(10); //"START"-Button
                 Boolean StopCompressor = _gamepad.GetButton(9); //"BACK"-Button
-                if (StartCompressor && (!Pressure_Switch)) //If pressure is below threshold and "START" is pressed
+                if (StartCompressor )//&& (!Pressure_Switch)) //If pressure is below threshold and "START" is pressed
                 {
                     _pcm.SetSolenoidOutput(1, true); //Start compressor
                     Debug.Print("StartCompressor");
+                    Debug.Print(pressure_string);
                 }
                 if (StopCompressor) //If "BACK" is pressed
                 {
-		    _pcm.SetSolenoidOutput(1, false); //Stop compressor
-					
+                    _pcm.SetSolenoidOutput(1, false); //Stop compressor
+
                     Debug.Print("StopCompressor");
                 }
 
@@ -132,20 +132,24 @@ namespace HERO_XInput_Gampad_Example
                 //Talon SRX == Drive System
                 if (LeftForward)
                 {
-                    LeftY = (float) (0.5);
+                    LeftY = (float)(0.5);
+                    Debug.Print("Moving");
                 }
                 if (LeftBackward)
                 {
                     LeftY = (float)(-0.5);
+                    Debug.Print("Moving");
 
                 }
                 if (RightForward)
                 {
                     RightY = (float)(0.5);
+                    Debug.Print("Moving");
                 }
                 if (RightBackward)
                 {
                     RightY = (float)(-0.5);
+                    Debug.Print("Moving");
                 }
 
 
@@ -153,7 +157,6 @@ namespace HERO_XInput_Gampad_Example
                 tal2.Set(ControlMode.PercentOutput, RightY); //moving tal2 with RT & RB
 
                 System.Threading.Thread.Sleep(10);
-
             }
         }
 
