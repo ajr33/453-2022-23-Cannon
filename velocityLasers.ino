@@ -3,7 +3,7 @@
 
 #define OutLaser 2
 
-#define LaserDistance 130000
+#define LaserDistance 135000 // distance in mircometers
 
 unsigned long startTime;
 unsigned long endTime;
@@ -33,9 +33,11 @@ void loop() {
 
     unsigned long totalTime = endTime - startTime;
     //Serial.println(totalTime);
-    unsigned long MpS = LaserDistance / totalTime;  
+    float MpS = (float)LaserDistance / (float)totalTime;  
+    Serial.print("Velocity: ");
+    Serial.println(MpS);
 
-    sprintf(velocity, "Velocity: %lu",MpS);
+    //sprintf(velocity, "Velocity: %.2f",MpS);
     sprintf(start, "Start: %lu",startTime);
     sprintf(end, "End: %lu\n",endTime);
     Serial.print(start);
