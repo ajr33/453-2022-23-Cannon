@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO.Ports;
 using Microsoft.SPOT;
 using Microsoft.SPOT.Hardware;
 using CTRE.Phoenix;
@@ -11,15 +12,27 @@ namespace HERO_XInput_Gampad_Example
     public class Program
     {
         GameController _gamepad = new GameController(UsbHostDevice.GetInstance(0)); //creating a controller object
-        static CTRE.Phoenix.PneumaticControlModule _pcm = new CTRE.Phoenix.PneumaticControlModule(0); //creating a PCM object
-        SafeOutputPort digitalOut1 = new SafeOutputPort(CTRE.HERO.IO.Port1.Pin4, false);  //Port1, PIN 4 on Hero Board > IN2 in L298 Connected to Linear Actuator
-        SafeOutputPort digitalOut2 = new SafeOutputPort(CTRE.HERO.IO.Port1.Pin5, false);   //Port1, PIN 5 on Hero Board > IN1 in L298 Connected to Linear Actuator
+        static PneumaticControlModule _pcm = new CTRE.Phoenix.PneumaticControlModule(0); //creating a PCM object
+        SafeOutputPort digitalOut1 = new SafeOutputPort(CTRE.HERO.IO.Port1.Pin3, false);  //Port1, PIN 4 on Hero Board > IN2 in L298 Connected to Linear Actuator
+        SafeOutputPort digitalOut2 = new SafeOutputPort(CTRE.HERO.IO.Port1.Pin6, false);   //Port1, PIN 5 on Hero Board > IN1 in L298 Connected to Linear Actuator
         InputPort inputDead = new InputPort(CTRE.HERO.IO.Port6.Pin4, false, Port.ResistorMode.PullDown); //Deadman switch, Port6 Pin4 on Hero Board
         InputPort inputPressure = new InputPort(CTRE.HERO.IO.Port6.Pin5, false, Port.ResistorMode.Disabled); //Input Pressure from Pi Port 26 connected to Port6 Pin5
-        AnalogInput analogPressure = new AnalogInput(CTRE.HERO.IO.Port1.Analog_Pin3);  //Analong input pressure from Port1 Pin 3
+       // AnalogInput analogPressure = new AnalogInput(CTRE.HERO.IO.Port1.Analog_Pin3);  //Analong input pressure from Port1 Pin 3
         TalonSRX tal1 = new TalonSRX(1); //first Talon, ID = 1
         TalonSRX tal2 = new TalonSRX(2);//second Talon, ID = 2
         long solenoidPeriod; //Time to auto-shutdown solenoid valve after shooting/opening it.
+        
+        SerialPort arduinoComm = new SerialPort(CTRE.HERO.IO.Port1.UART, 9600);
+        static byte[] arduinoCommBuffer = new byte[2];
+        bool sentToArduino = false;
+
+        readonly byte[] startPressurizing = new byte[2] { (byte)'P', 0x1 };
+        readonly byte[] stopPressurizing = new byte[2] { (byte)'P', 0x0 };
+
+        readonly byte[] arduinoSetupFire = new byte[2] { (byte)'F', 0x2 };
+        readonly byte[] arduinoReadyToFire = new byte[2] { (byte)'F', 0x1 };
+
+        readonly int uartTimeoutInMs = 100;
 
         public void RunForever()
         {
@@ -27,6 +40,12 @@ namespace HERO_XInput_Gampad_Example
             Boolean SolenoidTimer = false;
             tal1.ConfigFactoryDefault();
             tal2.ConfigFactoryDefault();
+
+            if(!arduinoComm.IsOpen)
+            {
+                arduinoComm.ReadTimeout = arduinoComm.WriteTimeout = uartTimeoutInMs;
+                arduinoComm.Open();
+            }
 
             int i = 0;
             while (true)
@@ -66,8 +85,8 @@ namespace HERO_XInput_Gampad_Example
 
                 //Pressure Sensor
                 Boolean Pressure_Switch = inputPressure.Read(); //Input from Raspberry Pi
-                double pressure_value = analogPressure.Read();  // Pressure Value read from Analog Input (Port 1 Pin 3)
-                string pressure_string = pressure_value.ToString(); //Converted to string for debugging
+                //double pressure_value = analogPressure.Read();  // Pressure Value read from Analog Input (Port 1 Pin 3)
+                //string pressure_string = pressure_value.ToString(); //Converted to string for debugging
                 String pressure = "Under threshold";
                 if (Pressure_Switch)
                 {
@@ -81,12 +100,20 @@ namespace HERO_XInput_Gampad_Example
                 Boolean StopCompressor = _gamepad.GetButton(9); //"BACK"-Button
                 if (StartCompressor )//&& (!Pressure_Switch)) //If pressure is below threshold and "START" is pressed
                 {
+                    if (sentToArduino)
+                    {
+                        sentToArduino = false;
+                    }
+                    //arduinoComm.Write(startPressurizing, 0, 2);
+
                     _pcm.SetSolenoidOutput(1, true); //Start compressor
                     Debug.Print("StartCompressor");
-                    Debug.Print(pressure_string);
+                   // Debug.Print(pressure_string);
                 }
                 if (StopCompressor) //If "BACK" is pressed
                 {
+                    //arduinoComm.Write(stopPressurizing, 0, 2);
+
                     _pcm.SetSolenoidOutput(1, false); //Stop compressor
 
                     Debug.Print("StopCompressor");
@@ -106,9 +133,22 @@ namespace HERO_XInput_Gampad_Example
                 //Debug.Print("Button Value: " + dead);
                 if (FIRE && (!Deadman_Switch)) //If Y is pressed and deadman switch is off
                 {
+                    if(!sentToArduino)
+                    {
+                        arduinoComm.Write(arduinoSetupFire, 0, 2);
+                        sentToArduino = true;
+                    }
+
+                    // This will serve as a timer and ready signal from the Arduino board.
+                    // It is a timer since there is a read timeout set and if no bytes are read
+                    // by the timeout the program will continue. 
+                    // If there are bytes successfully read from the Arduino, the program will
+                    // also continue immediately. 
+                    int bRead = arduinoComm.Read(arduinoCommBuffer, 0, arduinoCommBuffer.Length);
+
+
                     _pcm.SetSolenoidOutput(0, true); //Open Solenoid/Fire ID = 0 for solenoid
                     solenoidPeriod = (500 * TimeSpan.TicksPerMillisecond) + DateTime.Now.Ticks; //Start timer for half a second
-                    Debug.Print("FIRE");
                     SolenoidTimer = true;
                 }
                 if (SolenoidTimer)
@@ -133,23 +173,19 @@ namespace HERO_XInput_Gampad_Example
                 if (LeftForward)
                 {
                     LeftY = (float)(0.5);
-                    Debug.Print("Moving");
                 }
                 if (LeftBackward)
                 {
                     LeftY = (float)(-0.5);
-                    Debug.Print("Moving");
 
                 }
                 if (RightForward)
                 {
                     RightY = (float)(0.5);
-                    Debug.Print("Moving");
                 }
                 if (RightBackward)
                 {
                     RightY = (float)(-0.5);
-                    Debug.Print("Moving");
                 }
 
 
@@ -158,6 +194,19 @@ namespace HERO_XInput_Gampad_Example
 
                 System.Threading.Thread.Sleep(10);
             }
+        }
+
+
+
+        public static bool IsEqualArray(byte[] array1, byte[] array2, int length = 2)
+        {
+            for (int i = 0; i < length; i++){
+                if(array1[i] != array2[i])
+                {
+                    return false;
+                }
+            }
+            return true;
         }
 
         public static void Main()
