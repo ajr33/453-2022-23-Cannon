@@ -26,11 +26,11 @@ namespace HERO_XInput_Gampad_Example
         static byte[] arduinoCommBuffer = new byte[2];
         bool sentToArduino = false;
 
-        readonly byte[] startPressurizing = new byte[2] { (byte)'P', 0x1 };
-        readonly byte[] stopPressurizing = new byte[2] { (byte)'P', 0x0 };
+       // readonly byte[] startPressurizing = new byte[2] { (byte)'P', 0x1 };
+       // readonly byte[] stopPressurizing = new byte[2] { (byte)'P', 0x0 };
 
         readonly byte[] arduinoSetupFire = new byte[2] { (byte)'F', 0x2 };
-        readonly byte[] arduinoReadyToFire = new byte[2] { (byte)'F', 0x1 };
+        //readonly byte[] arduinoReadyToFire = new byte[2] { (byte)'F', 0x1 };
 
         readonly int uartTimeoutInMs = 100;
 
@@ -198,16 +198,6 @@ namespace HERO_XInput_Gampad_Example
 
 
 
-        public static bool IsEqualArray(byte[] array1, byte[] array2, int length = 2)
-        {
-            for (int i = 0; i < length; i++){
-                if(array1[i] != array2[i])
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
 
         public static void Main()
         {
