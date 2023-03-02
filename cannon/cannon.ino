@@ -1,20 +1,23 @@
 
-#define StartLaser 3  // 3 for interrupt
-#define EndLaser 10
-#define OutLaser 2
+#define StartTransmitter  2 // VCC for first laser.
+#define EndTransmitter    3 // VCC for second laser. 
 
+#define StartReceiver 9 
+#define EndReceiver 10
+
+// Can remove these gpio as power later.
 // Angle value when barrel is all the way down approx. 275
 // angle value when barrel is all the way high approx. 303
 #define angleGND 52
 #define angleVCC 22
 
-#define LaserDistance 135000  // distance in mircometers
+#define LaserDistance 135000  // Distance in mircometers
 
 volatile unsigned long startTime;
 volatile unsigned long endTime;
 volatile unsigned long totalTime = 0;
 
-unsigned long falseReadingDelay = 500000;  // in microseconds
+unsigned long falseReadingDelay = 500000;  // In microseconds
 unsigned long falseReadingCheck;
 volatile bool resetVelocity;
 
@@ -33,13 +36,16 @@ const byte arduinoReadyToFire[] = { 'F', 0x1 };
 // Pressure
 int pressureIn = A1;
 
-
+// Runs once on Arduino.
 void setup() {
   // put your setup code here, to run once:
-  pinMode(StartLaser, INPUT);
-  pinMode(EndLaser, INPUT);
-  pinMode(OutLaser, OUTPUT);
-  digitalWrite(OutLaser, HIGH);
+  pinMode(StartTransmitter, OUTPUT);
+  pinMode(EndTransmitter, OUTPUT);
+  pinMode(StartReceiver, INPUT);
+  pinMode(EndReceiver, INPUT);
+
+  digitalWrite(StartTransmitter, HIGH);
+  digitalWrite(EndTransmitter, HIGH);
 
   // Power for angle sensor
   pinMode(angleGND, OUTPUT);
@@ -47,7 +53,7 @@ void setup() {
   digitalWrite(angleGND, LOW);
   digitalWrite(angleVCC, HIGH);
 
-  //attachInterrupt(digitalPinToInterrupt(StartLaser), startVelocity, RISING);
+  //attachInterrupt(digitalPinToInterrupt(StartReceiver), startVelocity, RISING);
   Serial3.setTimeout(100);
 
   Serial.begin(9600);
@@ -55,33 +61,8 @@ void setup() {
   Serial.println("Starting...");
 }
 
-void startVelocity() {
-  //Serial.println("In Interrupt");
-  startTime = micros();
-  falseReadingCheck = startTime;
-  while (!digitalRead(EndLaser)) {
-
-    // Serial.print("false: ");
-    // Serial.println(falseReadingCheck);
-    // Serial.print("start: ");
-    // Serial.println(startTime);
-    // Serial.print("delay: ");
-    // Serial.println(falseReadingDelay);
-
-    if ((falseReadingCheck - startTime) > falseReadingDelay) {
-      resetVelocity = true;
-      Serial.println("Reset");
-      break;
-    }
-    falseReadingCheck = micros();
-  }
-  endTime = micros();
-  totalTime = endTime - startTime;
-}
-
-
+// Continously runs on Arduino.
 void loop() {
-
   while (idleReadings) {
     //PrintBoolReadings(3);
     int dPressure = analogRead(pressureIn);
@@ -90,7 +71,7 @@ void loop() {
     // Serial.print("Pressure: ");
     // Serial.println(cleanPressure);
 
-    int angle = map(analogRead(A0), 275, 303, 0, 60);
+    int angle = map(analogRead(A0), 275, 303, 12, 30);
     angle = constrain(angle, 0, 60);
     //Serial.println(analogRead(A0));
     Serial.print("Angle: ");
@@ -113,11 +94,11 @@ void loop() {
     Serial3.write(arduinoReadyToFire, 2);
   }
   while (velocityReadings) {
-    if (digitalRead(StartLaser)) {
+    if (digitalRead(StartReceiver)) {
 
       startTime = micros();
       falseReadingCheck = startTime;
-      while (!digitalRead(EndLaser)) {
+      while (!digitalRead(EndReceiver)) {
 
         // Serial.print("false: ");
         // Serial.println(falseReadingCheck);
@@ -158,9 +139,9 @@ void loop() {
         //Serial.println(MpS,DEC);
         Serial.println(velocity);
         Serial.println("_________");
-        //while (digitalRead(EndLaser));
+        //while (digitalRead(EndReceiver));
 
-        delay(5000);  // wait 1 second after launch
+        delay(5000);  // wait 5 seconds after launch
       } else {
         resetVelocity = false;
       }

@@ -1,0 +1,12 @@
+{
+    "configuration": "cpu=atmega2560",
+    "board": "arduino:avr:mega",
+    "sketch": "cannon\\cannon.ino",
+    "buildPreferences": [
+        [
+            "build.extra_flags",
+            "-D__AVR_ATmega2560__"
+        ]
+    ],
+    "port": "COM7"
+}

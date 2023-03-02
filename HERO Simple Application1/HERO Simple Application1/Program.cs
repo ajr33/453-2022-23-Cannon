@@ -110,7 +110,8 @@ namespace HERO_XInput_Gampad_Example
                     Debug.Print("StartCompressor");
                    // Debug.Print(pressure_string);
                 }
-                if (StopCompressor) //If "BACK" is pressed
+                else
+                //if (StopCompressor) //If "BACK" is pressed
                 {
                     //arduinoComm.Write(stopPressurizing, 0, 2);
 
