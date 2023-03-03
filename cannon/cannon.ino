@@ -1,3 +1,11 @@
+// Make sure that the Nextion Library is part of include path.
+// You can download from here: https://github.com/itead/ITEADLIB_Arduino_Nextion
+
+#include <Nextion.h>
+
+// Nextion Display Initialization
+NexNumber nex_angle = NexNumber(0,5,"angle");
+
 
 #define StartTransmitter  2 // VCC for first laser.
 #define EndTransmitter    3 // VCC for second laser. 
@@ -39,6 +47,9 @@ int pressureIn = A1;
 // Runs once on Arduino.
 void setup() {
   // put your setup code here, to run once:
+  // Nextion display initialization.
+  nexInit();
+
   pinMode(StartTransmitter, OUTPUT);
   pinMode(EndTransmitter, OUTPUT);
   pinMode(StartReceiver, INPUT);
@@ -68,15 +79,15 @@ void loop() {
     int dPressure = analogRead(pressureIn);
     int cleanPressure = map(dPressure, 80, 400, 0, 100);
     cleanPressure = constrain(cleanPressure, 0, 100);
-    // Serial.print("Pressure: ");
-    // Serial.println(cleanPressure);
+    Serial.print("Pressure: ");
+    Serial.println(cleanPressure);
 
     int angle = map(analogRead(A0), 275, 303, 12, 30);
     angle = constrain(angle, 0, 60);
-    //Serial.println(analogRead(A0));
-    Serial.print("Angle: ");
-    Serial.println(angle);
-    delay(10);
+    // Serial.print("Angle: ");
+    // Serial.println(angle);
+    nex_angle.setValue(angle);
+    delay(100);
 
 
     if (Serial3.available() > 0) {
