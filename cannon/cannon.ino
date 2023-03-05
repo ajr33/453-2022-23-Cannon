@@ -5,6 +5,8 @@
 
 // Nextion Display Initialization
 NexNumber nex_angle = NexNumber(0,5,"angle");
+NexNumber nex_pressure = NexNumber(0,4,"pressure");
+NexNumber nex_velocity = NexNumber(0,6,"velocity");
 
 
 #define StartTransmitter  2 // VCC for first laser.
@@ -25,7 +27,7 @@ volatile unsigned long startTime;
 volatile unsigned long endTime;
 volatile unsigned long totalTime = 0;
 
-unsigned long falseReadingDelay = 500000;  // In microseconds
+unsigned long falseReadingDelay = 500000;  // In microseconds = .5 seconds
 unsigned long falseReadingCheck;
 volatile bool resetVelocity;
 
@@ -43,9 +45,13 @@ const byte arduinoReadyToFire[] = { 'F', 0x1 };
 
 // Pressure
 int pressureIn = A1;
+int cleanPressure;
 
 // Runs once on Arduino.
 void setup() {
+  // For second receiver ground.
+  pinMode(12, OUTPUT);
+  digitalWrite(12, LOW);
   // put your setup code here, to run once:
   // Nextion display initialization.
   nexInit();
@@ -77,17 +83,18 @@ void loop() {
   while (idleReadings) {
     //PrintBoolReadings(3);
     int dPressure = analogRead(pressureIn);
-    int cleanPressure = map(dPressure, 80, 400, 0, 100);
+    cleanPressure = map(dPressure, 80, 400, 0, 100);
     cleanPressure = constrain(cleanPressure, 0, 100);
-    Serial.print("Pressure: ");
-    Serial.println(cleanPressure);
+    // Serial.print("Pressure: ");
+    // Serial.println(cleanPressure);
+    nex_pressure.setValue(cleanPressure);
 
     int angle = map(analogRead(A0), 275, 303, 12, 30);
     angle = constrain(angle, 0, 60);
     // Serial.print("Angle: ");
     // Serial.println(angle);
     nex_angle.setValue(angle);
-    delay(100);
+    delay(50);
 
 
     if (Serial3.available() > 0) {
@@ -99,12 +106,13 @@ void loop() {
   }
 
 
-
+  unsigned long velocityStart = micros(); // Timeout to wait for reading from first laser.
+  falseReadingCheck = velocityStart;
   // Send to Hero that Arduino is ready for fire.
   if (Serial3.availableForWrite()) {
     Serial3.write(arduinoReadyToFire, 2);
   }
-  while (velocityReadings) {
+  while (velocityReadings){
     if (digitalRead(StartReceiver)) {
 
       startTime = micros();
@@ -128,15 +136,16 @@ void loop() {
       endTime = micros();
       totalTime = endTime - startTime;
 
-      PrintBoolReadings(1);
+      // PrintBoolReadings(1);
       SetIdleReadings();
-      PrintBoolReadings(2);
+      // PrintBoolReadings(2);
 
 
 
       if (!resetVelocity && totalTime > 0) {
         Serial.println(totalTime);
         float MpS = (float)LaserDistance / (float)totalTime;
+        MpS += cleanPressure * .1; // account for error based on pressure. This means that the higher the pressure, the greater the line will change to match the actual velocity. 
         Serial.print("Velocity: ");
         Serial.println(MpS);
 
@@ -151,11 +160,26 @@ void loop() {
         Serial.println(velocity);
         Serial.println("_________");
         //while (digitalRead(EndReceiver));
+        nex_velocity.setValue(round(MpS));
 
         delay(5000);  // wait 5 seconds after launch
       } else {
         resetVelocity = false;
       }
+    }
+    else if ((velocityStart - falseReadingCheck) < falseReadingDelay)
+    {
+      velocityStart = micros();
+      // Serial.println("Velocity trigger.");
+      // Serial.print(" VeloStart: ");
+      // Serial.print(velocityStart);
+      // Serial.print(" FalseDelay: ");
+      // Serial.print(falseReadingCheck);
+
+    }
+    else{
+      Serial.println("Velocity timed out.");
+      SetIdleReadings();
     }
   }
 }
