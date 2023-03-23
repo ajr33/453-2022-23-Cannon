@@ -12,16 +12,17 @@ NexNumber nex_velocity = NexNumber(0,6,"velocity");
 #define StartTransmitter  2 // VCC for first laser.
 #define EndTransmitter    3 // VCC for second laser. 
 
-#define StartReceiver 9 
-#define EndReceiver 10
+// Laser Receiver inputs.
+#define StartReceiver 10 
+#define EndReceiver 11
 
 // Can remove these gpio as power later.
 // Angle value when barrel is all the way down approx. 275
 // angle value when barrel is all the way high approx. 303
-#define angleGND 52
-#define angleVCC 22
+//#define angleGND 52
+//#define angleVCC 22
 
-#define LaserDistance 135000  // Distance in mircometers
+#define LaserDistance 245000  // Distance in mircometers
 
 volatile unsigned long startTime;
 volatile unsigned long endTime;
@@ -50,8 +51,8 @@ int cleanPressure;
 // Runs once on Arduino.
 void setup() {
   // For second receiver ground.
-  pinMode(12, OUTPUT);
-  digitalWrite(12, LOW);
+  // pinMode(12, OUTPUT);
+  // digitalWrite(12, LOW);
   // put your setup code here, to run once:
   // Nextion display initialization.
   nexInit();
@@ -65,10 +66,10 @@ void setup() {
   digitalWrite(EndTransmitter, HIGH);
 
   // Power for angle sensor
-  pinMode(angleGND, OUTPUT);
-  pinMode(angleVCC, OUTPUT);
-  digitalWrite(angleGND, LOW);
-  digitalWrite(angleVCC, HIGH);
+  // pinMode(angleGND, OUTPUT);
+  // pinMode(angleVCC, OUTPUT);
+  // digitalWrite(angleGND, LOW);
+  // digitalWrite(angleVCC, HIGH);
 
   //attachInterrupt(digitalPinToInterrupt(StartReceiver), startVelocity, RISING);
   Serial3.setTimeout(100);
