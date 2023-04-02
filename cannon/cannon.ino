@@ -1,12 +1,37 @@
-// Make sure that the Nextion Library is part of include path.
-// You can download from here: https://github.com/itead/ITEADLIB_Arduino_Nextion
+/* 
+Arduino code for Cannon team.
+Course:       CSE 450/453.
+Instructor:   Kris Schindler.
+Team:         
+  Anthony Roberts
+  Jeffery Naranjo
+  Jennifer Tsang
+
+Details:
+  This code is for the Arduino to receive input data and display
+  on a Nextion display. Values of the current pressure & angle are constantly 
+  shown & with the previous values shown after the projectile was fired. 
+  The velocity in meters/second is shown for the last fire as well.
+
+Important notes:
+  Make sure that the Nextion Library is part of include path.
+  You can download from here: https://github.com/itead/ITEADLIB_Arduino_Nextion
+
+Any questions about this code feel free to reach out to Anthony.
+  Email:  ajr33@buffalo.edu
+*/
 
 #include <Nextion.h>
 
 // Nextion Display Initialization
-NexNumber nex_angle = NexNumber(0,5,"angle");
-NexNumber nex_pressure = NexNumber(0,4,"pressure");
-NexNumber nex_velocity = NexNumber(0,6,"velocity");
+NexNumber nex_current_pressure = NexNumber(0,1,"pressure");
+NexNumber nex_current_angle = NexNumber(0,2,"angle");
+
+// Previous values when fired.
+NexNumber nex_prev_velocity = NexNumber(0,3,"velocity");
+NexNumber nex_prev_pressure = NexNumber(0,4,"old_pressure");
+NexNumber nex_prev_angle = NexNumber(0,5,"old_angle");
+
 
 
 #define StartTransmitter  2 // VCC for first laser.
@@ -22,7 +47,7 @@ NexNumber nex_velocity = NexNumber(0,6,"velocity");
 //#define angleGND 52
 //#define angleVCC 22
 
-#define LaserDistance 245000  // Distance in mircometers
+#define LaserDistance 250000  // Distance in mircometers (25 cm)
 
 volatile unsigned long startTime;
 volatile unsigned long endTime;
@@ -47,6 +72,10 @@ const byte arduinoReadyToFire[] = { 'F', 0x1 };
 // Pressure
 int pressureIn = A1;
 int cleanPressure;
+
+
+// Angle
+int angle;
 
 // Runs once on Arduino.
 void setup() {
@@ -88,16 +117,16 @@ void loop() {
     cleanPressure = constrain(cleanPressure, 0, 100);
     // Serial.print("Pressure: ");
     // Serial.println(cleanPressure);
-    nex_pressure.setValue(cleanPressure);
+    nex_current_pressure.setValue(cleanPressure);
 
-    int angle = map(analogRead(A0), 275, 303, 12, 30);
+    angle = map(analogRead(A0), 275, 303, 12, 30);
     angle = constrain(angle, 0, 60);
     // Serial.print("Angle: ");
     // Serial.println(angle);
-    nex_angle.setValue(angle);
+    nex_current_angle.setValue(angle);
     delay(50);
 
-
+    // Check data from HERO.
     if (Serial3.available() > 0) {
       Serial3.readBytes(heroBuf, 2);
       if (memcmp(heroBuf, arduinoSetupFire, 2) == 0) {
@@ -161,7 +190,9 @@ void loop() {
         Serial.println(velocity);
         Serial.println("_________");
         //while (digitalRead(EndReceiver));
-        nex_velocity.setValue(round(MpS));
+        nex_prev_velocity.setValue(round(MpS));
+        nex_prev_pressure.setValue(cleanPressure);
+        nex_prev_angle.setValue(angle);
 
         delay(5000);  // wait 5 seconds after launch
       } else {

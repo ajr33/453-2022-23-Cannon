@@ -15,29 +15,53 @@ namespace HERO_XInput_Gampad_Example
         static PneumaticControlModule _pcm = new CTRE.Phoenix.PneumaticControlModule(0); //creating a PCM object
         SafeOutputPort digitalOut1 = new SafeOutputPort(CTRE.HERO.IO.Port1.Pin3, false);  //Port1, PIN 4 on Hero Board > IN2 in L298 Connected to Linear Actuator
         SafeOutputPort digitalOut2 = new SafeOutputPort(CTRE.HERO.IO.Port1.Pin6, false);   //Port1, PIN 5 on Hero Board > IN1 in L298 Connected to Linear Actuator
-        InputPort inputDead = new InputPort(CTRE.HERO.IO.Port6.Pin4, false, Port.ResistorMode.PullDown); //Deadman switch, Port6 Pin4 on Hero Board
-        InputPort inputPressure = new InputPort(CTRE.HERO.IO.Port6.Pin5, false, Port.ResistorMode.Disabled); //Input Pressure from Pi Port 26 connected to Port6 Pin5
-       // AnalogInput analogPressure = new AnalogInput(CTRE.HERO.IO.Port1.Analog_Pin3);  //Analong input pressure from Port1 Pin 3
+        InputPort inputDead = new InputPort(CTRE.HERO.IO.Port6.Pin6, false, Port.ResistorMode.PullDown); //Deadman switch, Port6 Pin4 on Hero Board
+        //InputPort inputPressure = new InputPort(CTRE.HERO.IO.Port1.Pin4, false, Port.ResistorMode.Disabled); //Input Pressure from Pi Port 26 connected to Port6 Pin5
+        AnalogInput analogPressure = new AnalogInput(CTRE.HERO.IO.Port1.Analog_Pin4);  //Analong input pressure from Port1 Pin 4
         TalonSRX tal1 = new TalonSRX(1); //first Talon, ID = 1
         TalonSRX tal2 = new TalonSRX(2);//second Talon, ID = 2
         long solenoidPeriod; //Time to auto-shutdown solenoid valve after shooting/opening it.
         
-        SerialPort arduinoComm = new SerialPort(CTRE.HERO.IO.Port1.UART, 9600);
+        SerialPort arduinoComm = new SerialPort(CTRE.HERO.IO.Port6.UART, 9600);
         static byte[] arduinoCommBuffer = new byte[2];
         bool sentToArduino = false;
 
-       // readonly byte[] startPressurizing = new byte[2] { (byte)'P', 0x1 };
-       // readonly byte[] stopPressurizing = new byte[2] { (byte)'P', 0x0 };
+        /// <summary>
+        /// The maximum pressure that should be allowed. 
+        /// </summary>
+        double Pressure_Threshold_Value = 0.51;
 
+        /// <summary>
+        /// Message to send to the arduino to allow firing.
+        /// </summary>
         readonly byte[] arduinoSetupFire = new byte[2] { (byte)'F', 0x2 };
-        //readonly byte[] arduinoReadyToFire = new byte[2] { (byte)'F', 0x1 };
 
+        /// <summary>
+        /// The uart timeout if not able to send or receive by the require time in milliseconds.
+        /// </summary>
         readonly int uartTimeoutInMs = 100;
+
+        /// <summary>
+        /// The value if the Y button is pressed to fire the projectile.
+        /// </summary>
+        bool FIRE = false;
+
+        /// <summary>
+        /// The value of the deadman switch to allow firing or not.
+        /// </summary>
+        bool Deadman_Switch = false;
+
+
+        // Actuator active for only 5 seconds.
+        bool actuatorOn;
+        long actuatorTimeout;
+        long actuatorTime;
+
 
         public void RunForever()
         {
             _pcm.SetSolenoidOutput(1, false); //Initialize the compressor to be turned off, compressor ID = 1
-            Boolean SolenoidTimer = false;
+            bool SolenoidTimer = false;
             tal1.ConfigFactoryDefault();
             tal2.ConfigFactoryDefault();
 
@@ -64,75 +88,100 @@ namespace HERO_XInput_Gampad_Example
 
 
                 //Linear Actuator
-                Boolean Stopmovement = _gamepad.GetButton(1); //X-Button
-                Boolean Extend = _gamepad.GetButton(2);//A-Button
-                Boolean Retract = _gamepad.GetButton(3); //B-Button
+                bool Stopmovement = _gamepad.GetButton(1); //X-Button
+                bool Extend = _gamepad.GetButton(2);//A-Button
+                bool Retract = _gamepad.GetButton(3); //B-Button
+                
                 if (Extend)
                 {
                     digitalOut1.Write(false);
                     digitalOut2.Write(true);
+                    actuatorOn = true;
+                    actuatorTimeout = (5 * TimeSpan.TicksPerSecond) + DateTime.Now.Ticks;
+                    actuatorTime = DateTime.Now.Ticks;
+
                 }
                 if (Retract)
                 {
                     digitalOut1.Write(true);
                     digitalOut2.Write(false);
+                    actuatorOn = true;
+                    actuatorTimeout = (5 * TimeSpan.TicksPerSecond) + DateTime.Now.Ticks;
+                    actuatorTime = DateTime.Now.Ticks;
                 }
                 if (Stopmovement)
                 {
                     digitalOut1.Write(false);
                     digitalOut2.Write(false);
+                    actuatorOn = false;
                 }
 
+                if(actuatorOn)
+                {
+                    actuatorTime = DateTime.Now.Ticks;
+                    if (actuatorTime > actuatorTimeout)
+                    {
+                        digitalOut1.Write(false);
+                        digitalOut2.Write(false);
+                        actuatorOn = false;
+                    }
+                }
+                
+
                 //Pressure Sensor
-                Boolean Pressure_Switch = inputPressure.Read(); //Input from Raspberry Pi
-                //double pressure_value = analogPressure.Read();  // Pressure Value read from Analog Input (Port 1 Pin 3)
-                //string pressure_string = pressure_value.ToString(); //Converted to string for debugging
+                //Boolean Pressure_Switch = inputPressure.Read(); //Input from Raspberry Pi
+                double pressure_value = analogPressure.Read();  // Pressure Value read from Analog Input (Port 1 Pin 4)
+                string pressure_string = pressure_value.ToString(); //Converted to string for debugging
                 String pressure = "Under threshold";
-                if (Pressure_Switch)
+              /*  if (Pressure_Switch)
                 {
                     pressure = "Above threshold";
                     _pcm.SetSolenoidOutput(1, false);	//Pressure is above threshold, turn off solenoid
-                }
+                }*/
                 Debug.Print("Pressure Value: " + pressure); //Print pressure value
 
                 //Compressor
                 Boolean StartCompressor = _gamepad.GetButton(10); //"START"-Button
                 Boolean StopCompressor = _gamepad.GetButton(9); //"BACK"-Button
-                if (StartCompressor )//&& (!Pressure_Switch)) //If pressure is below threshold and "START" is pressed
+                
+
+                if (StartCompressor)//&& (!Pressure_Switch)) //If pressure is below threshold and "START" is pressed
                 {
-                    if (sentToArduino)
+                    // Stop the compressor if over the threshold.
+                    if (pressure_value > Pressure_Threshold_Value)
                     {
-                        sentToArduino = false;
+                        _pcm.SetSolenoidOutput(1, false);
+                        Debug.Print("Pressure is too damn high!");
                     }
-                    //arduinoComm.Write(startPressurizing, 0, 2);
 
-                    _pcm.SetSolenoidOutput(1, true); //Start compressor
-                    Debug.Print("StartCompressor");
-                   // Debug.Print(pressure_string);
+                    else
+                    {
+
+                        if (sentToArduino)
+                        {
+                            sentToArduino = false;
+                        }
+
+                        _pcm.SetSolenoidOutput(1, true); //Start compressor
+                        Debug.Print("StartCompressor");
+                        Debug.Print(pressure_string);
+                    }
+
                 }
+
+                // When the start button is released...
                 else
-                //if (StopCompressor) //If "BACK" is pressed
                 {
-                    //arduinoComm.Write(stopPressurizing, 0, 2);
-
                     _pcm.SetSolenoidOutput(1, false); //Stop compressor
-
-                    Debug.Print("StopCompressor");
                 }
 
 
 
 
 
-                Boolean FIRE = _gamepad.GetButton(4); //Y-Button
-                Boolean Deadman_Switch = inputDead.Read();
-                String dead = "OFF";
-                if (Deadman_Switch) //Current state of deadman switch
-                {
-                    dead = "ON";
-                }
-                //Debug.Print("Button Value: " + dead);
-                if (FIRE && (!Deadman_Switch)) //If Y is pressed and deadman switch is off
+                FIRE = _gamepad.GetButton(4); //Y-Button
+                Deadman_Switch = inputDead.Read();
+                if (FIRE && (Deadman_Switch)) //If Y and the deadman switch is pressed... 
                 {
                     if(!sentToArduino)
                     {
@@ -163,10 +212,12 @@ namespace HERO_XInput_Gampad_Example
                     }
                 }
 
-                Boolean LeftForward = _gamepad.GetButton(5); //LB
-                Boolean LeftBackward = _gamepad.GetButton(7); //LT
-                Boolean RightForward = _gamepad.GetButton(6); //RB
-                Boolean RightBackward = _gamepad.GetButton(8); //RT
+
+
+                bool LeftForward = _gamepad.GetButton(5); //LB
+                bool LeftBackward = _gamepad.GetButton(7); //LT
+                bool RightForward = _gamepad.GetButton(6); //RB
+                bool RightBackward = _gamepad.GetButton(8); //RT
 
                 float LeftY = 0;
                 float RightY = 0;
