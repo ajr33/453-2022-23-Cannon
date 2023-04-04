@@ -118,11 +118,19 @@ void loop() {
     // Serial.print("Pressure: ");
     // Serial.println(cleanPressure);
     nex_current_pressure.setValue(cleanPressure);
-
-    angle = map(analogRead(A0), 275, 303, 12, 30);
-    angle = constrain(angle, 0, 60);
-    // Serial.print("Angle: ");
-    // Serial.println(angle);
+    // Min angle = 42 degrees
+    // Max angle = 58 - 59 degrees0
+    // sensor at 0 = 255
+    // sensor at 180 = 740
+    angle = map(analogRead(A0), 230, 783, 0, 180);
+    angle = constrain(angle, 0, 180);
+    //angle -= ;
+    //float correctedAngle = angle * (angle/38);
+    //angle = angle * (angle/38);
+    //angle = constrain(angle, 0, 60);
+    //angle += 22;
+    Serial.print("Angle: ");
+    Serial.println(analogRead(A0));
     nex_current_angle.setValue(angle);
     delay(50);
 
