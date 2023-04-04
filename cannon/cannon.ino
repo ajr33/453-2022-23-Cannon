@@ -124,11 +124,6 @@ void loop() {
     // sensor at 180 = 740
     angle = map(analogRead(A0), 230, 783, 0, 180);
     angle = constrain(angle, 0, 180);
-    //angle -= ;
-    //float correctedAngle = angle * (angle/38);
-    //angle = angle * (angle/38);
-    //angle = constrain(angle, 0, 60);
-    //angle += 22;
     Serial.print("Angle: ");
     Serial.println(analogRead(A0));
     nex_current_angle.setValue(angle);
