@@ -179,14 +179,10 @@ void loop() {
     // Serial.print("Pressure: ");
     // Serial.println(cleanPressure);
     nex_current_pressure.setValue(cleanPressure);
-    // TODO: Have the Hero board send a signal to arduino when user is pressurizing.
+    // TODO: Have the Hero board send a signal to arduino when user is pressurizing & changing angle.
     if(prevPressure < cleanPressure)
     {
       BlinkLED(VelocityLED);
-    }
-    else if (prevPressure > cleanPressure)
-    {
-      BlinkLED(IdleLED);
     }
     prevPressure = cleanPressure;
     // Min angle = 42 degrees
