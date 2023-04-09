@@ -34,8 +34,8 @@ NexNumber nex_prev_angle = NexNumber(0,5,"old_angle");
 
 
 
-#define StartTransmitter  2 // VCC for first laser.
-#define EndTransmitter    3 // VCC for second laser. 
+#define StartTransmitter  5 // VCC for first laser.
+#define EndTransmitter    6 // VCC for second laser. 
 
 // Laser Receiver inputs.
 #define StartReceiver 10 
@@ -77,6 +77,25 @@ int cleanPressure;
 // Angle
 int angle;
 
+// Deadman Switch
+#define Dead 12
+
+// LEDs
+// IO Pins D0, D1, & D2 will represent the status of the cannon.
+// Note: The RGB LED is common anode, so each LED is active low.
+#define IdleLED 2       // Red.
+#define VelocityLED 3   // Green.
+#define DeadLED 4       // Blue.
+
+// Previous values.
+int prevPressure;
+int prevAngle;
+
+// Function declarations.
+void RGB_Check(int amount = 3, unsigned long timePerBlink = 250);
+void BlinkLED(int LED, unsigned long timePerBlink = 150);
+
+
 // Runs once on Arduino.
 void setup() {
   // For second receiver ground.
@@ -86,6 +105,7 @@ void setup() {
   // Nextion display initialization.
   nexInit();
 
+  // Lasers
   pinMode(StartTransmitter, OUTPUT);
   pinMode(EndTransmitter, OUTPUT);
   pinMode(StartReceiver, INPUT);
@@ -94,23 +114,64 @@ void setup() {
   digitalWrite(StartTransmitter, HIGH);
   digitalWrite(EndTransmitter, HIGH);
 
-  // Power for angle sensor
-  // pinMode(angleGND, OUTPUT);
-  // pinMode(angleVCC, OUTPUT);
-  // digitalWrite(angleGND, LOW);
-  // digitalWrite(angleVCC, HIGH);
+  // Deadman Swtich Input
+  pinMode(Dead, INPUT);
 
-  //attachInterrupt(digitalPinToInterrupt(StartReceiver), startVelocity, RISING);
+  // LEDs
+  pinMode(IdleLED, OUTPUT);
+  pinMode(VelocityLED, OUTPUT);
+  pinMode(DeadLED, OUTPUT);
+  digitalWrite(IdleLED, HIGH);
+  digitalWrite(VelocityLED, HIGH);
+  digitalWrite(DeadLED, !digitalRead(Dead));
+
+
+  // UART/Serial
   Serial3.setTimeout(100);
-
   Serial.begin(9600);
   Serial3.begin(9600);
   Serial.println("Starting...");
+
+  // Illuminate each LED to make sure that they're working properly.  
+  RGB_Check();
+  // // Red.
+  // digitalWrite(VelocityLED, HIGH);
+  // digitalWrite(DeadLED, HIGH);
+  // digitalWrite(IdleLED, LOW);
+  // delay(1000);
+
+  // // Green.
+  // digitalWrite(IdleLED, HIGH);
+  // digitalWrite(DeadLED, HIGH);
+  // digitalWrite(VelocityLED, LOW);
+  // delay(1000);
+  
+  // // Blue.
+  // digitalWrite(VelocityLED, HIGH);
+  // digitalWrite(IdleLED, HIGH);
+  // digitalWrite(DeadLED, LOW);
+  // delay(1000);
+
+  // // White.
+  // digitalWrite(VelocityLED, LOW);
+  // digitalWrite(IdleLED, LOW);
+  // digitalWrite(DeadLED, LOW);
+  // delay(1000);
+
+  // Start as idle, reading in the pressure & angle measurements
+  // then displaying them on the nextion display.
+
+  Serial.println("Ready");
+
+  SetIdleReadings();
 }
 
 // Continously runs on Arduino.
 void loop() {
   while (idleReadings) {
+    // Update Deadman switch status.
+    digitalWrite(DeadLED, !digitalRead(Dead));
+
     //PrintBoolReadings(3);
     int dPressure = analogRead(pressureIn);
     cleanPressure = map(dPressure, 80, 400, 0, 100);
@@ -118,16 +179,27 @@ void loop() {
     // Serial.print("Pressure: ");
     // Serial.println(cleanPressure);
     nex_current_pressure.setValue(cleanPressure);
+    // TODO: Have the Hero board send a signal to arduino when user is pressurizing.
+    if(prevPressure < cleanPressure)
+    {
+      BlinkLED(VelocityLED);
+    }
+    else if (prevPressure > cleanPressure)
+    {
+      BlinkLED(IdleLED);
+    }
+    prevPressure = cleanPressure;
     // Min angle = 42 degrees
     // Max angle = 58 - 59 degrees0
     // sensor at 0 = 255
     // sensor at 180 = 740
     angle = map(analogRead(A0), 230, 783, 0, 180);
     angle = constrain(angle, 0, 180);
-    Serial.print("Angle: ");
-    Serial.println(analogRead(A0));
+    // Serial.print("Angle: ");
+    // Serial.println(analogRead(A0));
     nex_current_angle.setValue(angle);
-    delay(50);
+    prevAngle = angle;
+    delay(10);
 
     // Check data from HERO.
     if (Serial3.available() > 0) {
@@ -146,8 +218,7 @@ void loop() {
     Serial3.write(arduinoReadyToFire, 2);
   }
   while (velocityReadings){
-    if (digitalRead(StartReceiver)) {
-
+    if (digitalRead(StartReceiver)) { // Read from the fisrt laser.
       startTime = micros();
       falseReadingCheck = startTime;
       while (!digitalRead(EndReceiver)) {
@@ -170,39 +241,49 @@ void loop() {
       totalTime = endTime - startTime;
 
       // PrintBoolReadings(1);
-      SetIdleReadings();
+      // SetIdleReadings();
       // PrintBoolReadings(2);
 
 
 
       if (!resetVelocity && totalTime > 0) {
-        Serial.println(totalTime);
+        //Serial.println(totalTime);
+
+        // Set LEDs to idicate that a projectile has went through both lasers.
+        digitalWrite(IdleLED, HIGH);
+        digitalWrite(DeadLED, HIGH);
+        digitalWrite(VelocityLED, LOW); 
+
         float MpS = (float)LaserDistance / (float)totalTime;
         MpS += cleanPressure * .1; // account for error based on pressure. This means that the higher the pressure, the greater the line will change to match the actual velocity. 
-        Serial.print("Velocity: ");
-        Serial.println(MpS);
+        // Serial.print("Velocity: ");
+        // Serial.println(MpS);
 
         totalTime = 0;
         //sprintf(velocity, "Velocity: %.2f",MpS);
-        sprintf(start, "Start: %lu", startTime);
-        sprintf(end, "End: %lu\n", endTime);
-        Serial.print(start);
-        Serial.print(", ");
-        Serial.print(end);
-        //Serial.println(MpS,DEC);
-        Serial.println(velocity);
-        Serial.println("_________");
-        //while (digitalRead(EndReceiver));
+        // sprintf(start, "Start: %lu", startTime);
+        // sprintf(end, "End: %lu\n", endTime);
+        // Serial.print(start);
+        // Serial.print(", ");
+        // Serial.print(end);
+        // Serial.println(velocity);
+        // Serial.println("_________");
         nex_prev_velocity.setValue(round(MpS));
         nex_prev_pressure.setValue(cleanPressure);
         nex_prev_angle.setValue(angle);
 
+        
         delay(5000);  // wait 5 seconds after launch
+        SetIdleReadings();
+
+
       } else {
         resetVelocity = false;
       }
     }
-    else if ((velocityStart - falseReadingCheck) < falseReadingDelay)
+    // Keep track of the time when reading first laser.
+    // If still within limit...
+    else if ((velocityStart - falseReadingCheck) < falseReadingDelay) 
     {
       velocityStart = micros();
       // Serial.println("Velocity trigger.");
@@ -212,7 +293,8 @@ void loop() {
       // Serial.print(falseReadingCheck);
 
     }
-    else{
+    else{ // First laser timed out.
+      BlinkIdleLED(10);
       Serial.println("Velocity timed out.");
       SetIdleReadings();
     }
@@ -223,11 +305,15 @@ void loop() {
 void SetVelocityReadings() {
   velocityReadings = true;
   idleReadings = false;
+  
 }
 
 void SetIdleReadings() {
   idleReadings = true;
   velocityReadings = false;
+  // Set LEDs to match status.
+  digitalWrite(IdleLED, LOW);
+  digitalWrite(VelocityLED, HIGH);
 }
 
 void PrintBoolReadings(int id) {
@@ -237,4 +323,78 @@ void PrintBoolReadings(int id) {
   Serial.print(idleReadings);
   Serial.print(" Velo: ");
   Serial.println(velocityReadings);
+}
+
+// Blinks the RGB LED to make sure each one works as intended.
+void RGB_Check(int amount = 3, unsigned long timePerBlink = 250)
+{
+  // Turn off all LEDs.
+  digitalWrite(IdleLED, HIGH);
+  digitalWrite(VelocityLED, HIGH);
+  digitalWrite(DeadLED, HIGH);
+
+  for (int i = 0; i < amount * 2; i++)
+  {
+    digitalWrite(IdleLED, !digitalRead(IdleLED));
+    delay(timePerBlink);
+  }
+
+  for (int i = 0; i < amount * 2; i++)
+  {
+    digitalWrite(VelocityLED, !digitalRead(VelocityLED));
+    delay(timePerBlink);
+  }
+  
+  for (int i = 0; i < amount * 2; i++)
+  {
+    digitalWrite(DeadLED, !digitalRead(DeadLED));
+    delay(timePerBlink);
+  }
+
+  // Show white at the end.
+  digitalWrite(VelocityLED, LOW);
+  digitalWrite(IdleLED, LOW);
+  digitalWrite(DeadLED, LOW);
+  delay(timePerBlink*6);
+}
+
+// Blinks the Idle LED the specified amount of times. 
+void BlinkIdleLED(int amount)
+{
+  digitalWrite(IdleLED, HIGH);
+  digitalWrite(VelocityLED, HIGH);
+  digitalWrite(DeadLED, HIGH);
+
+
+  for (int i=0; i < amount*2; i++)
+  {
+    delay(200);
+    digitalWrite(IdleLED, !digitalRead(IdleLED));
+  }
+}
+
+void BlinkLED(int LED, unsigned long timePerBlink = 150)
+{
+  if(LED == VelocityLED)
+  {
+    digitalWrite(LED & VelocityLED, LOW);
+    delay(timePerBlink);
+    digitalWrite(LED & VelocityLED, HIGH);
+    delay(timePerBlink);
+  }
+  else if (LED == IdleLED)
+  {
+    digitalWrite(LED & IdleLED, LOW);
+    delay(timePerBlink);
+    digitalWrite(LED & IdleLED, HIGH);
+    delay(timePerBlink);
+    digitalWrite(LED & IdleLED, LOW);
+  }
+  else if (LED == DeadLED)
+  {
+    digitalWrite(LED & DeadLED, LOW);
+    delay(timePerBlink);
+    digitalWrite(LED & DeadLED, HIGH);
+    delay(timePerBlink);
+  }
 }
