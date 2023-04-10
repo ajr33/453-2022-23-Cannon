@@ -1,11 +1,11 @@
-﻿using System;
-using System.IO.Ports;
-using Microsoft.SPOT;
-using Microsoft.SPOT.Hardware;
-using CTRE.Phoenix;
+﻿using CTRE.Phoenix;
 using CTRE.Phoenix.Controller;
 using CTRE.Phoenix.MotorControl;
 using CTRE.Phoenix.MotorControl.CAN;
+using Microsoft.SPOT;
+using Microsoft.SPOT.Hardware;
+using System;
+using System.IO.Ports;
 
 namespace HERO_XInput_Gampad_Example
 {
@@ -21,10 +21,18 @@ namespace HERO_XInput_Gampad_Example
         TalonSRX tal1 = new TalonSRX(1); //first Talon, ID = 1
         TalonSRX tal2 = new TalonSRX(2);//second Talon, ID = 2
         long solenoidPeriod; //Time to auto-shutdown solenoid valve after shooting/opening it.
-        
+
+        // LED outputs for cannon state.
+        // Note that the RGB LED is common anode so each color is active low.
+        OutputPort PressureLED = new OutputPort(CTRE.HERO.IO.Port3.Pin3, true); // Blue
+        OutputPort AngleLED = new OutputPort(CTRE.HERO.IO.Port3.Pin4, true);    // Red
+        OutputPort FireLED = new OutputPort(CTRE.HERO.IO.Port3.Pin5, true);    // Green
+
         SerialPort arduinoComm = new SerialPort(CTRE.HERO.IO.Port6.UART, 9600);
         static byte[] arduinoCommBuffer = new byte[2];
         bool sentToArduino = false;
+
+
 
         /// <summary>
         /// The maximum pressure that should be allowed. 
@@ -77,11 +85,21 @@ namespace HERO_XInput_Gampad_Example
 
                 if (_gamepad.GetConnectionStatus() == UsbDeviceConnection.Connected)
                 {
-
                     CTRE.Phoenix.Watchdog.Feed();
+                    if(!SolenoidTimer)
+                    {
+                        FireLED.Write(true);
+                    }
                 }
                 else
                 {
+                    // Blinks RGB LED white if controller is not connected.
+                    if (i % 15 == 0)
+                    {
+                        PressureLED.Write(!PressureLED.Read());
+                        AngleLED.Write(!AngleLED.Read());
+                        FireLED.Write(!FireLED.Read());
+                    }
                     Debug.Print("Not connected: " + i); //The controller is not connected
                 }
                 i++;
@@ -97,7 +115,7 @@ namespace HERO_XInput_Gampad_Example
                     digitalOut1.Write(false);
                     digitalOut2.Write(true);
                     actuatorOn = true;
-                    actuatorTimeout = (5 * TimeSpan.TicksPerSecond) + DateTime.Now.Ticks;
+                    actuatorTimeout = (3 * TimeSpan.TicksPerSecond) + DateTime.Now.Ticks;
                     actuatorTime = DateTime.Now.Ticks;
 
                 }
@@ -106,7 +124,7 @@ namespace HERO_XInput_Gampad_Example
                     digitalOut1.Write(true);
                     digitalOut2.Write(false);
                     actuatorOn = true;
-                    actuatorTimeout = (5 * TimeSpan.TicksPerSecond) + DateTime.Now.Ticks;
+                    actuatorTimeout = (3 * TimeSpan.TicksPerSecond) + DateTime.Now.Ticks;
                     actuatorTime = DateTime.Now.Ticks;
                 }
                 if (Stopmovement)
@@ -118,12 +136,22 @@ namespace HERO_XInput_Gampad_Example
 
                 if(actuatorOn)
                 {
+                    AngleLED.Write(false);
                     actuatorTime = DateTime.Now.Ticks;
                     if (actuatorTime > actuatorTimeout)
                     {
                         digitalOut1.Write(false);
                         digitalOut2.Write(false);
                         actuatorOn = false;
+                        AngleLED.Write(true);
+                    }
+                }
+                else 
+                {
+                    if (_gamepad.GetConnectionStatus() == UsbDeviceConnection.Connected)
+                    {
+                        // Turn off the angle LED if on.
+                        AngleLED.Write(true);
                     }
                 }
                 
@@ -147,32 +175,36 @@ namespace HERO_XInput_Gampad_Example
 
                 if (StartCompressor)//&& (!Pressure_Switch)) //If pressure is below threshold and "START" is pressed
                 {
+                    
                     // Stop the compressor if over the threshold.
                     if (pressure_value > Pressure_Threshold_Value)
                     {
                         _pcm.SetSolenoidOutput(1, false);
-                        Debug.Print("Pressure is too damn high!");
+                        PressureLED.Write(true);   // Turn off pressure LED.
                     }
-
                     else
                     {
-
                         if (sentToArduino)
                         {
                             sentToArduino = false;
                         }
 
                         _pcm.SetSolenoidOutput(1, true); //Start compressor
+                        PressureLED.Write(false);   // Turn on pressure LED.
                         Debug.Print("StartCompressor");
                         Debug.Print(pressure_string);
                     }
-
                 }
 
                 // When the start button is released...
                 else
                 {
                     _pcm.SetSolenoidOutput(1, false); //Stop compressor
+
+                    if(_gamepad.GetConnectionStatus() == UsbDeviceConnection.Connected)
+                    {
+                        PressureLED.Write(true);   // Turn off pressure LED only if the gamepad is connedted.
+                    }
                 }
 
 
@@ -198,6 +230,7 @@ namespace HERO_XInput_Gampad_Example
 
 
                     _pcm.SetSolenoidOutput(0, true); //Open Solenoid/Fire ID = 0 for solenoid
+                    FireLED.Write(false);
                     solenoidPeriod = (500 * TimeSpan.TicksPerMillisecond) + DateTime.Now.Ticks; //Start timer for half a second
                     SolenoidTimer = true;
                 }
@@ -207,6 +240,7 @@ namespace HERO_XInput_Gampad_Example
                     if (nowSolenoid > solenoidPeriod) //If half a second has passed
                     {
                         _pcm.SetSolenoidOutput(0, false); //Close the solenoid
+                        FireLED.Write(true);
                         SolenoidTimer = false;
                         Debug.Print("Close Solenoid");
                     }

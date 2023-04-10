@@ -83,10 +83,13 @@ int angle;
 // LEDs
 // IO Pins D0, D1, & D2 will represent the status of the cannon.
 // Note: The RGB LED is common anode, so each LED is active low.
-#define IdleLED 2       // Red.
+#define IdleLED     2   // Red.
 #define VelocityLED 3   // Green.
-#define DeadLED 4       // Blue.
+#define DeadLED     4   // Blue.
 
+#define PressureLED 22
+#define AngleLED    23
+#define FireLED     24
 // Previous values.
 int prevPressure;
 int prevAngle;
@@ -121,9 +124,14 @@ void setup() {
   pinMode(IdleLED, OUTPUT);
   pinMode(VelocityLED, OUTPUT);
   pinMode(DeadLED, OUTPUT);
+  pinMode(PressureLED, INPUT_PULLUP);
+  pinMode(AngleLED, INPUT_PULLUP);
+  pinMode(FireLED, INPUT_PULLUP);
+
   digitalWrite(IdleLED, HIGH);
   digitalWrite(VelocityLED, HIGH);
-  digitalWrite(DeadLED, !digitalRead(Dead));
+  digitalWrite(DeadLED, HIGH);
+  
 
 
   // UART/Serial
@@ -179,11 +187,6 @@ void loop() {
     // Serial.print("Pressure: ");
     // Serial.println(cleanPressure);
     nex_current_pressure.setValue(cleanPressure);
-    // TODO: Have the Hero board send a signal to arduino when user is pressurizing & changing angle.
-    if(prevPressure < cleanPressure)
-    {
-      BlinkLED(VelocityLED);
-    }
     prevPressure = cleanPressure;
     // Min angle = 42 degrees
     // Max angle = 58 - 59 degrees0
@@ -301,7 +304,6 @@ void loop() {
 void SetVelocityReadings() {
   velocityReadings = true;
   idleReadings = false;
-  
 }
 
 void SetIdleReadings() {
@@ -357,10 +359,10 @@ void RGB_Check(int amount = 3, unsigned long timePerBlink = 250)
 // Blinks the Idle LED the specified amount of times. 
 void BlinkIdleLED(int amount)
 {
+  // Turn each LED off first. 
   digitalWrite(IdleLED, HIGH);
   digitalWrite(VelocityLED, HIGH);
   digitalWrite(DeadLED, HIGH);
-
 
   for (int i=0; i < amount*2; i++)
   {
@@ -368,6 +370,7 @@ void BlinkIdleLED(int amount)
     digitalWrite(IdleLED, !digitalRead(IdleLED));
   }
 }
+
 
 void BlinkLED(int LED, unsigned long timePerBlink = 150)
 {
