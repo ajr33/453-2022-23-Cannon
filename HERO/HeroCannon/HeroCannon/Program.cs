@@ -32,6 +32,9 @@ namespace HERO_XInput_Gampad_Example
         static byte[] arduinoCommBuffer = new byte[2];
         bool sentToArduino = false;
 
+        // Talon SRX drive value
+        double Drive_Value = 0.5;
+
 
 
         /// <summary>
@@ -213,7 +216,7 @@ namespace HERO_XInput_Gampad_Example
 
                 FIRE = _gamepad.GetButton(4); //Y-Button
                 Deadman_Switch = inputDead.Read();
-                if (FIRE && (Deadman_Switch)) //If Y and the deadman switch is pressed... 
+                if (FIRE )//&& (Deadman_Switch)) //If Y and the deadman switch is pressed... 
                 {
                     if(!sentToArduino)
                     {
@@ -258,20 +261,20 @@ namespace HERO_XInput_Gampad_Example
                 //Talon SRX == Drive System
                 if (LeftForward)
                 {
-                    LeftY = (float)(0.5);
+                    LeftY = (float)(Drive_Value);
                 }
                 if (LeftBackward)
                 {
-                    LeftY = (float)(-0.5);
+                    LeftY = (float)(-Drive_Value);
 
                 }
                 if (RightForward)
                 {
-                    RightY = (float)(0.5);
+                    RightY = (float)(Drive_Value);
                 }
                 if (RightBackward)
                 {
-                    RightY = (float)(-0.5);
+                    RightY = (float)(-Drive_Value);
                 }
 
 
