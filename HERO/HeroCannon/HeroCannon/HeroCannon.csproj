@@ -4,13 +4,13 @@
     <LangVersion>5</LangVersion>
   </PropertyGroup>
   <PropertyGroup>
-    <AssemblyName>HERO Simple Application1</AssemblyName>
+    <AssemblyName>HeroCannon</AssemblyName>
     <OutputType>Exe</OutputType>
-    <RootNamespace>HERO_Simple_Application1</RootNamespace>
+    <RootNamespace>HeroCannon</RootNamespace>
     <ProjectTypeGuids>{b69e3092-b931-443c-abe7-7e7b65f2a37f};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <ProductVersion>9.0.21022</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{C7D76A6C-64E1-48F0-9389-CF4B0F05BCEB}</ProjectGuid>
+    <ProjectGuid>{534C3B24-BE22-4F88-9B36-F25D3B034748}</ProjectGuid>
     <TargetFrameworkVersion>v4.4</TargetFrameworkVersion>
     <NetMfTargetsBaseDir Condition="'$(NetMfTargetsBaseDir)'==''">$(MSBuildExtensionsPath32)\Microsoft\.NET Micro Framework\</NetMfTargetsBaseDir>
     <DeployDevice>Cross Link HERO .NETMF_Mini-USB</DeployDevice>
@@ -32,9 +32,6 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-  </PropertyGroup>
-  <PropertyGroup>
-    <StartupObject>HERO_XInput_Gampad_Example.Program</StartupObject>
   </PropertyGroup>
   <Import Project="$(NetMfTargetsBaseDir)$(TargetFrameworkVersion)\CSharp.Targets" />
   <ItemGroup>
