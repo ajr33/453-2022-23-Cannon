@@ -6,17 +6,14 @@ Team:
   Anthony Roberts
   Jeffery Naranjo
   Jennifer Tsang
-
 Details:
   This code is for the Arduino to receive input data and display
   on a Nextion display. Values of the current pressure & angle are constantly 
   shown & with the previous values shown after the projectile was fired. 
   The velocity in meters/second is shown for the last fire as well.
-
 Important notes:
   Make sure that the Nextion Library is part of include path.
   You can download from here: https://github.com/itead/ITEADLIB_Arduino_Nextion
-
 Any questions about this code feel free to reach out to Anthony.
   Email:  ajr33@buffalo.edu
 */
@@ -28,9 +25,10 @@ NexNumber nex_current_pressure = NexNumber(0,1,"pressure");
 NexNumber nex_current_angle = NexNumber(0,2,"angle");
 
 // Previous values when fired.
-NexNumber nex_prev_velocity = NexNumber(0,3,"velocity");
-NexNumber nex_prev_pressure = NexNumber(0,4,"old_pressure");
-NexNumber nex_prev_angle = NexNumber(0,5,"old_angle");
+// NexNumber vel_behind = NexNumber(0,3,"velocity");
+NexText nex_prev_velocity = NexText(0,5,"float_vel");
+NexNumber nex_prev_pressure = NexNumber(0,3,"old_pressure");
+NexNumber nex_prev_angle = NexNumber(0,4,"old_angle");
 
 
 
@@ -63,6 +61,8 @@ bool velocityReadings = false;
 char velocity[20];
 char start[20];
 char end[20];
+
+char velocity_str[8]; // buffer for velocity string
 
 byte heroBuf[2];
 
@@ -98,6 +98,9 @@ int prevAngle;
 void RGB_Check(int amount = 3, unsigned long timePerBlink = 250);
 void BlinkLED(int LED, unsigned long timePerBlink = 150);
 
+
+// Nextion display is connected to Serial2.
+//#define NexSerial Serial2
 
 // Runs once on Arduino.
 void setup() {
@@ -139,6 +142,31 @@ void setup() {
   Serial.begin(9600);
   Serial3.begin(9600);
   Serial.println("Starting...");
+
+  // Serial.println("Test nextion");
+  
+  
+
+  // Serial2.begin(9600);
+
+  // Serial2.print(F("velocity.val=30"));
+  // // Serial2.print(F("h"));
+  // // Serial2.print(F("\""));
+  // Serial2.print(F("\xFF\xFF\xFF"));
+
+  //nex_prev_velocity.setText("hello");
+  // delay(1000);
+  // nex_prev_velocity.setText("h");
+  // nex_prev_angle.setValue(32);
+  // delay(1000);
+  // nex_prev_velocity.setText("he");
+  // nex_prev_angle.setValue(33);
+  // delay(1000);
+  // nex_prev_angle.setValue(34);
+  // nex_prev_velocity.setText("hel");
+  // delay(1000);
+  // nex_prev_velocity.setText("hell");
+  // nex_prev_angle.setValue(35);
 
   // Illuminate each LED to make sure that they're working properly.  
   RGB_Check();
@@ -267,7 +295,9 @@ void loop() {
         // Serial.print(end);
         // Serial.println(velocity);
         // Serial.println("_________");
-        nex_prev_velocity.setValue(round(MpS));
+        //nex_prev_velocity.setValue(round(MpS));   
+        dtostrf(MpS, 0, 1, velocity_str);   // convert float to string for displaying on screen
+        nex_prev_velocity.setText(velocity_str);
         nex_prev_pressure.setValue(cleanPressure);
         nex_prev_angle.setValue(angle);
 
@@ -292,7 +322,11 @@ void loop() {
       // Serial.print(falseReadingCheck);
 
     }
-    else{ // First laser timed out.
+    else
+    { // First laser timed out.
+      // If there is any pressure in the system still, the cannon didn't fire.
+      if (map(analogRead(pressureIn), 80, 400, 0, 100) > 2){ continue; }
+
       BlinkIdleLED(10);
       Serial.println("Velocity timed out.");
       SetIdleReadings();

@@ -216,7 +216,7 @@ namespace HERO_XInput_Gampad_Example
 
                 FIRE = _gamepad.GetButton(4); //Y-Button
                 Deadman_Switch = inputDead.Read();
-                if (FIRE )//&& (Deadman_Switch)) //If Y and the deadman switch is pressed... 
+                if (FIRE && (Deadman_Switch)) //If Y and the deadman switch is pressed... 
                 {
                     if(!sentToArduino)
                     {
