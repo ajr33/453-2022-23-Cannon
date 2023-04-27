@@ -20,6 +20,10 @@ Any questions about this code feel free to reach out to Anthony.
 
 #include <Nextion.h>
 
+
+#define LaserDistance 310000  // Distance in mircometers (31 cm)
+#define ShouldAccountForError true
+
 // Nextion Display Initialization
 NexNumber nex_current_pressure = NexNumber(0,1,"pressure");
 NexNumber nex_current_angle = NexNumber(0,2,"angle");
@@ -36,8 +40,8 @@ NexNumber nex_prev_angle = NexNumber(0,4,"old_angle");
 #define EndTransmitter    6 // VCC for second laser. 
 
 // Laser Receiver inputs.
-#define StartReceiver 10 
-#define EndReceiver 11
+#define StartReceiver 2 
+#define EndReceiver 3
 
 // Can remove these gpio as power later.
 // Angle value when barrel is all the way down approx. 275
@@ -45,13 +49,13 @@ NexNumber nex_prev_angle = NexNumber(0,4,"old_angle");
 //#define angleGND 52
 //#define angleVCC 22
 
-#define LaserDistance 250000  // Distance in mircometers (25 cm)
+
 
 volatile unsigned long startTime;
 volatile unsigned long endTime;
 volatile unsigned long totalTime = 0;
 
-unsigned long falseReadingDelay = 500000;  // In microseconds = .5 seconds
+unsigned long falseReadingDelay = 1000000;  // In microseconds = 1 second 
 unsigned long falseReadingCheck;
 volatile bool resetVelocity;
 
@@ -83,9 +87,9 @@ int angle;
 // LEDs
 // IO Pins D0, D1, & D2 will represent the status of the cannon.
 // Note: The RGB LED is common anode, so each LED is active low.
-#define IdleLED     2   // Red.
-#define VelocityLED 3   // Green.
-#define DeadLED     4   // Blue.
+#define IdleLED     9   // Red.
+#define VelocityLED 10   // Green.
+#define DeadLED     11   // Blue.
 
 #define PressureLED 22
 #define AngleLED    23
@@ -98,6 +102,35 @@ int prevAngle;
 void RGB_Check(int amount = 3, unsigned long timePerBlink = 250);
 void BlinkLED(int LED, unsigned long timePerBlink = 150);
 
+
+
+// Interrupts.
+// States.
+volatile bool sTrigger, eTrigger = false;
+
+
+// ISRs.
+void StartLaserIsr()
+{
+  // Make sure state was not already set.
+  if (!sTrigger && velocityReadings)
+  {
+    startTime = micros();
+    sTrigger = true;
+  }
+}
+
+
+void EndLaserIsr()
+{
+  // Make sure state was not already set.
+  if ( !eTrigger && velocityReadings)
+  {
+    endTime = micros();
+    eTrigger = true;
+  }
+  
+}
 
 // Nextion display is connected to Serial2.
 //#define NexSerial Serial2
@@ -114,6 +147,7 @@ void setup() {
   // Lasers
   pinMode(StartTransmitter, OUTPUT);
   pinMode(EndTransmitter, OUTPUT);
+  
   pinMode(StartReceiver, INPUT);
   pinMode(EndReceiver, INPUT);
 
@@ -136,6 +170,10 @@ void setup() {
   digitalWrite(DeadLED, HIGH);
   
 
+
+  // Interrupts for the laser receivers.
+  // attachInterrupt(digitalPinToInterrupt(StartReceiver), StartLaserIsr, RISING);
+  // attachInterrupt(digitalPinToInterrupt(EndReceiver), EndLaserIsr, RISING);
 
   // UART/Serial
   Serial3.setTimeout(100);
@@ -169,7 +207,7 @@ void setup() {
   // nex_prev_angle.setValue(35);
 
   // Illuminate each LED to make sure that they're working properly.  
-  RGB_Check();
+  // RGB_Check();
   // // Red.
   // digitalWrite(VelocityLED, HIGH);
   // digitalWrite(DeadLED, HIGH);
@@ -244,93 +282,195 @@ void loop() {
   if (Serial3.availableForWrite()) {
     Serial3.write(arduinoReadyToFire, 2);
   }
-  while (velocityReadings){
-    if (digitalRead(StartReceiver)) { // Read from the fisrt laser.
+  
+  while (velocityReadings)
+  {
+    // Serial.println("velo read");
+    // while (!sTrigger) // First laser is not triggered. 
+    // {
+    // Serial.println("start read");
+
+    //   falseReadingCheck = micros();
+    //   if ((falseReadingCheck - velocityStart) > falseReadingDelay) 
+    //   {
+    //     resetVelocity = true;
+    //     Serial.println("Reset");
+    //     break;
+    //   }
+    // }
+
+    // if (!resetVelocity)
+    // {
       startTime = micros();
-      falseReadingCheck = startTime;
-      while (!digitalRead(EndReceiver)) {
+      // while (!eTrigger) // Wait for the end laser to be triggered.
+      while (!digitalRead(EndReceiver))
+      {
+        // // Serial.println("end read");
 
-        // Serial.print("false: ");
-        // Serial.println(falseReadingCheck);
-        // Serial.print("start: ");
-        // Serial.println(startTime);
-        // Serial.print("delay: ");
-        // Serial.println(falseReadingDelay);
-
-        if ((falseReadingCheck - startTime) > falseReadingDelay) {
+        falseReadingCheck = micros();
+        if ((falseReadingCheck - startTime) > falseReadingDelay) 
+        {
           resetVelocity = true;
           Serial.println("Reset");
           break;
         }
-        falseReadingCheck = micros();
       }
       endTime = micros();
-      totalTime = endTime - startTime;
 
-      // PrintBoolReadings(1);
-      // SetIdleReadings();
-      // PrintBoolReadings(2);
-
-
-
-      if (!resetVelocity && totalTime > 0) {
-        //Serial.println(totalTime);
-
-        // Set LEDs to idicate that a projectile has went through both lasers.
-        digitalWrite(IdleLED, HIGH);
-        digitalWrite(DeadLED, HIGH);
-        digitalWrite(VelocityLED, LOW); 
-
-        float MpS = (float)LaserDistance / (float)totalTime;
-        MpS += cleanPressure * .1; // account for error based on pressure. This means that the higher the pressure, the greater the line will change to match the actual velocity. 
-        // Serial.print("Velocity: ");
-        // Serial.println(MpS);
-
-        totalTime = 0;
-        //sprintf(velocity, "Velocity: %.2f",MpS);
-        // sprintf(start, "Start: %lu", startTime);
-        // sprintf(end, "End: %lu\n", endTime);
-        // Serial.print(start);
-        // Serial.print(", ");
-        // Serial.print(end);
-        // Serial.println(velocity);
-        // Serial.println("_________");
-        //nex_prev_velocity.setValue(round(MpS));   
-        dtostrf(MpS, 0, 1, velocity_str);   // convert float to string for displaying on screen
-        nex_prev_velocity.setText(velocity_str);
-        nex_prev_pressure.setValue(cleanPressure);
-        nex_prev_angle.setValue(angle);
-
-        
-        delay(5000);  // wait 5 seconds after launch
-        SetIdleReadings();
-
-
-      } else {
-        resetVelocity = false;
-      }
-    }
-    // Keep track of the time when reading first laser.
-    // If still within limit...
-    else if ((velocityStart - falseReadingCheck) < falseReadingDelay) 
+    // }
+      
+    if (!resetVelocity)
     {
-      velocityStart = micros();
-      // Serial.println("Velocity trigger.");
-      // Serial.print(" VeloStart: ");
-      // Serial.print(velocityStart);
-      // Serial.print(" FalseDelay: ");
-      // Serial.print(falseReadingCheck);
+      
+      // Calculate the velocity.
+      totalTime = endTime - startTime;
+      float MpS = (float)LaserDistance / (float)totalTime;
 
+      if (ShouldAccountForError)
+      {
+        MpS += cleanPressure * .43; // account for error based on pressure. This means that the higher the pressure, the greater the line will change to match the actual velocity. 
+
+      } 
+      // Serial.print("Velocity: ");
+      // Serial.println(MpS);
+
+      totalTime = 0;
+      dtostrf(MpS, 0, 1, velocity_str);   // convert float to string for displaying on screen
+
+      sprintf(velocity, "Velocity: %.2f",MpS);
+      sprintf(start, "Start: %lu", startTime);
+      sprintf(end, "End: %lu\n", endTime);
+      Serial.print(start);
+      Serial.print(", ");
+      Serial.print(end);
+      Serial.println(velocity_str);
+      Serial.println("_________");
+      //nex_prev_velocity.setValue(round(MpS));   
+      
+      nex_prev_velocity.setText(velocity_str);
+      nex_prev_pressure.setValue(cleanPressure);
+      nex_prev_angle.setValue(angle);
+
+      
+      delay(5000);  // wait 5 seconds after launch
+      SetIdleReadings();
+      //continue;
     }
     else
-    { // First laser timed out.
+    {
+      // At this point the projectile has potentially timed out.
+
       // If there is any pressure in the system still, the cannon didn't fire.
       if (map(analogRead(pressureIn), 80, 400, 0, 100) > 2){ continue; }
+      Serial.println("Velocity Failed");
+      Serial.print("Start Trigger: ");
+      Serial.println(sTrigger);
+
+      Serial.print("End Trigger: ");
+      Serial.println(eTrigger);
+
+      Serial.print("Start time: ");
+      Serial.println(startTime);
+
+      Serial.print("End time: ");
+      Serial.println(endTime);
 
       BlinkIdleLED(10);
       Serial.println("Velocity timed out.");
       SetIdleReadings();
     }
+
+    
+  //   if (digitalRead(StartReceiver)) { // Read from the fisrt laser.
+  //     startTime = micros();
+  //     falseReadingCheck = startTime;
+  //     while (!digitalRead(EndReceiver)) {
+
+  //       // Serial.print("false: ");
+  //       // Serial.println(falseReadingCheck);
+  //       // Serial.print("start: ");
+  //       // Serial.println(startTime);
+  //       // Serial.print("delay: ");
+  //       // Serial.println(falseReadingDelay);
+
+  //       if ((falseReadingCheck - startTime) > falseReadingDelay) {
+  //         resetVelocity = true;
+  //         Serial.println("Reset");
+  //         break;
+  //       }
+  //       falseReadingCheck = micros();
+  //     }
+  //     endTime = micros();
+  //     totalTime = endTime - startTime;
+
+  //     // PrintBoolReadings(1);
+  //     // SetIdleReadings();
+  //     // PrintBoolReadings(2);
+
+
+
+  //     if (!resetVelocity && totalTime > 0) {
+  //       //Serial.println(totalTime);
+
+  //       // Set LEDs to idicate that a projectile has went through both lasers.
+  //       digitalWrite(IdleLED, HIGH);
+  //       digitalWrite(DeadLED, HIGH);
+  //       digitalWrite(VelocityLED, LOW); 
+
+  //       float MpS = (float)LaserDistance / (float)totalTime;
+
+  //       if (ShouldAccountForError)
+  //       {
+  //         MpS += cleanPressure * .1; // account for error based on pressure. This means that the higher the pressure, the greater the line will change to match the actual velocity. 
+  //       } 
+  //       // Serial.print("Velocity: ");
+  //       // Serial.println(MpS);
+
+  //       totalTime = 0;
+  //       //sprintf(velocity, "Velocity: %.2f",MpS);
+  //       // sprintf(start, "Start: %lu", startTime);
+  //       // sprintf(end, "End: %lu\n", endTime);
+  //       // Serial.print(start);
+  //       // Serial.print(", ");
+  //       // Serial.print(end);
+  //       // Serial.println(velocity);
+  //       // Serial.println("_________");
+  //       //nex_prev_velocity.setValue(round(MpS));   
+  //       dtostrf(MpS, 0, 1, velocity_str);   // convert float to string for displaying on screen
+  //       nex_prev_velocity.setText(velocity_str);
+  //       nex_prev_pressure.setValue(cleanPressure);
+  //       nex_prev_angle.setValue(angle);
+
+        
+  //       delay(5000);  // wait 5 seconds after launch
+  //       SetIdleReadings();
+
+
+  //     } else {
+  //       resetVelocity = false;
+  //     }
+  //   }
+  //   // Keep track of the time when reading first laser.
+  //   // If still within limit...
+  //   else if ((falseReadingCheck - startTime) < falseReadingDelay) 
+  //   {
+  //     falseReadingCheck = micros();
+  //     // Serial.println("Velocity trigger.");
+  //     // Serial.print(" VeloStart: ");
+  //     // Serial.print(velocityStart);
+  //     // Serial.print(" FalseDelay: ");
+  //     // Serial.print(falseReadingCheck);
+
+  //   }
+  //   else
+  //   { // First laser timed out.
+  //     // If there is any pressure in the system still, the cannon didn't fire.
+  //     if (map(analogRead(pressureIn), 80, 400, 0, 100) > 2){ continue; }
+
+  //     BlinkIdleLED(10);
+  //     Serial.println("Velocity timed out.");
+  //     SetIdleReadings();
+  //   }
   }
 }
 
@@ -343,6 +483,9 @@ void SetVelocityReadings() {
 void SetIdleReadings() {
   idleReadings = true;
   velocityReadings = false;
+
+  resetVelocity = false;
+  sTrigger = eTrigger = false;
   // Set LEDs to match status.
   digitalWrite(IdleLED, LOW);
   digitalWrite(VelocityLED, HIGH);
@@ -430,4 +573,13 @@ void BlinkLED(int LED, unsigned long timePerBlink = 150)
     digitalWrite(LED & DeadLED, HIGH);
     delay(timePerBlink);
   }
+}
+
+
+void SetVelocityLED()
+{
+  // Set LEDs to idicate that a projectile has went through both lasers.
+  digitalWrite(IdleLED, HIGH);
+  digitalWrite(DeadLED, HIGH);
+  digitalWrite(VelocityLED, LOW); 
 }
