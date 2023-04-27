@@ -315,6 +315,8 @@ void loop() {
           break;
         }
       }
+      // Wait for the projectile to fully pass the laser.
+      while (digitalRead(EndReceiver));
       endTime = micros();
 
     // }
@@ -328,7 +330,7 @@ void loop() {
 
       if (ShouldAccountForError)
       {
-        MpS += cleanPressure * .43; // account for error based on pressure. This means that the higher the pressure, the greater the line will change to match the actual velocity. 
+        MpS += cleanPressure * .45; // account for error based on pressure. This means that the higher the pressure, the greater the line will change to match the actual velocity. 
 
       } 
       // Serial.print("Velocity: ");
