@@ -13,8 +13,8 @@ namespace HERO_XInput_Gampad_Example
     {
         GameController _gamepad = new GameController(UsbHostDevice.GetInstance(0)); //creating a controller object
         static PneumaticControlModule _pcm = new CTRE.Phoenix.PneumaticControlModule(0); //creating a PCM object
-        SafeOutputPort digitalOut1 = new SafeOutputPort(CTRE.HERO.IO.Port1.Pin3, false);  //Port1, PIN 4 on Hero Board > IN2 in L298 Connected to Linear Actuator
-        SafeOutputPort digitalOut2 = new SafeOutputPort(CTRE.HERO.IO.Port1.Pin6, false);   //Port1, PIN 5 on Hero Board > IN1 in L298 Connected to Linear Actuator
+        SafeOutputPort digitalOut1 = new SafeOutputPort(CTRE.HERO.IO.Port1.Pin3, false);  //Port1, PIN 3 on Hero Board > IN2 in L298 Connected to Linear Actuator
+        SafeOutputPort digitalOut2 = new SafeOutputPort(CTRE.HERO.IO.Port1.Pin6, false);   //Port1, PIN 6 on Hero Board > IN1 in L298 Connected to Linear Actuator
         InputPort inputDead = new InputPort(CTRE.HERO.IO.Port6.Pin6, false, Port.ResistorMode.PullDown); //Deadman switch, Port6 Pin4 on Hero Board
         //InputPort inputPressure = new InputPort(CTRE.HERO.IO.Port1.Pin4, false, Port.ResistorMode.Disabled); //Input Pressure from Pi Port 26 connected to Port6 Pin5
         AnalogInput analogPressure = new AnalogInput(CTRE.HERO.IO.Port1.Analog_Pin4);  //Analong input pressure from Port1 Pin 4
@@ -24,9 +24,11 @@ namespace HERO_XInput_Gampad_Example
 
         // LED outputs for cannon state.
         // Note that the RGB LED is common anode so each color is active low.
-        OutputPort PressureLED = new OutputPort(CTRE.HERO.IO.Port3.Pin3, true); // Blue
+        OutputPort PressureLED = new OutputPort(CTRE.HERO.IO.Port3.Pin3, true); // Green
         OutputPort AngleLED = new OutputPort(CTRE.HERO.IO.Port3.Pin4, true);    // Red
-        OutputPort FireLED = new OutputPort(CTRE.HERO.IO.Port3.Pin5, true);    // Green
+        OutputPort FireLED = new OutputPort(CTRE.HERO.IO.Port3.Pin5, true);    // Blue
+
+        OutputPort SpeedLED = new OutputPort(CTRE.HERO.IO.Port3.Pin6, true); 
 
         SerialPort arduinoComm = new SerialPort(CTRE.HERO.IO.Port6.UART, 9600);
         static byte[] arduinoCommBuffer = new byte[2];
@@ -34,13 +36,18 @@ namespace HERO_XInput_Gampad_Example
 
         // Talon SRX drive value
         double Drive_Value = 0.5;
+        double Boost_Value = 0.6;
+        bool boost;
+        long nowBoost;
+        long BoostPeriod;
+
 
 
 
         /// <summary>
         /// The maximum pressure that should be allowed. 
         /// </summary>
-        double Pressure_Threshold_Value = 0.51;
+        double Pressure_Threshold_Value = 0.50;
 
         /// <summary>
         /// Message to send to the arduino to allow firing.
@@ -173,7 +180,7 @@ namespace HERO_XInput_Gampad_Example
 
                 //Compressor
                 Boolean StartCompressor = _gamepad.GetButton(10); //"START"-Button
-                Boolean StopCompressor = _gamepad.GetButton(9); //"BACK"-Button
+                // Boolean StopCompressor = _gamepad.GetButton(9); //"BACK"-Button
                 
 
                 if (StartCompressor)//&& (!Pressure_Switch)) //If pressure is below threshold and "START" is pressed
@@ -251,32 +258,64 @@ namespace HERO_XInput_Gampad_Example
 
 
 
-                bool LeftForward = _gamepad.GetButton(5); //LB
-                bool LeftBackward = _gamepad.GetButton(7); //LT
-                bool RightForward = _gamepad.GetButton(6); //RB
-                bool RightBackward = _gamepad.GetButton(8); //RT
+                bool LeftBackward = _gamepad.GetButton(5); //LB
+                bool LeftForward = _gamepad.GetButton(7); //LT
+                bool RightBackward = _gamepad.GetButton(6); //RB
+                bool RightForward = _gamepad.GetButton(8); //RT
+
+     
+                bool fastMode = _gamepad.GetButton(11); // LS-Click
+                if (fastMode)
+                {
+                    boost = true;
+                    // Time for 2 seconds.
+                    BoostPeriod = (2 * TimeSpan.TicksPerSecond) + nowBoost;
+                    SpeedLED.Write(false);
+                }
+                else
+                {
+                    SpeedLED.Write(true);
+                }
+
+                // Check if the higher speed mode should be disabled.
+                nowBoost = DateTime.Now.Ticks;
+                if (nowBoost > BoostPeriod)
+                {
+                   boost = false;
+                }
 
                 float LeftY = 0;
                 float RightY = 0;
                 //Talon SRX == Drive System
-                if (LeftForward)
-                {
-                    LeftY = (float)(Drive_Value);
-                }
                 if (LeftBackward)
                 {
-                    LeftY = (float)(-Drive_Value);
-
+                    LeftY = (float)(Drive_Value);
+                    
                 }
-                if (RightForward)
+                if (LeftForward)
                 {
-                    RightY = (float)(Drive_Value);
+                    LeftY = (float)(-Drive_Value);
+                    if (boost)
+                    {
+                        LeftY = (float)(-Boost_Value);
+                    }
+
                 }
                 if (RightBackward)
                 {
+                    RightY = (float)(Drive_Value);
+                   
+                }
+                if (RightForward)
+                {
                     RightY = (float)(-Drive_Value);
+                    if (boost)
+                    {
+                        RightY = (float)(-Boost_Value);
+                    }
                 }
 
+                
 
                 tal1.Set(ControlMode.PercentOutput, LeftY * -1); //moving tal1 with LT & LB
                 tal2.Set(ControlMode.PercentOutput, RightY); //moving tal2 with RT & RB

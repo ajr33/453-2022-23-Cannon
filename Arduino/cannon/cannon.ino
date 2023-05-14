@@ -36,18 +36,12 @@ NexNumber nex_prev_angle = NexNumber(0,4,"old_angle");
 
 
 
-#define StartTransmitter  5 // VCC for first laser.
+#define StartTransmitter  5 // VCC for first laser. TODEL
 #define EndTransmitter    6 // VCC for second laser. 
 
 // Laser Receiver inputs.
-#define StartReceiver 2 
+#define StartReceiver 2 // TODEL
 #define EndReceiver 3
-
-// Can remove these gpio as power later.
-// Angle value when barrel is all the way down approx. 275
-// angle value when barrel is all the way high approx. 303
-//#define angleGND 52
-//#define angleVCC 22
 
 
 
@@ -55,7 +49,7 @@ volatile unsigned long startTime;
 volatile unsigned long endTime;
 volatile unsigned long totalTime = 0;
 
-unsigned long falseReadingDelay = 1000000;  // In microseconds = 1 second 
+unsigned long falseReadingDelay = 500000;  // In microseconds = .5 second 
 unsigned long falseReadingCheck;
 volatile bool resetVelocity;
 
@@ -181,33 +175,11 @@ void setup() {
   Serial3.begin(9600);
   Serial.println("Starting...");
 
-  // Serial.println("Test nextion");
-  
-  
-
-  // Serial2.begin(9600);
-
-  // Serial2.print(F("velocity.val=30"));
-  // // Serial2.print(F("h"));
-  // // Serial2.print(F("\""));
-  // Serial2.print(F("\xFF\xFF\xFF"));
-
-  //nex_prev_velocity.setText("hello");
-  // delay(1000);
-  // nex_prev_velocity.setText("h");
-  // nex_prev_angle.setValue(32);
-  // delay(1000);
-  // nex_prev_velocity.setText("he");
-  // nex_prev_angle.setValue(33);
-  // delay(1000);
-  // nex_prev_angle.setValue(34);
-  // nex_prev_velocity.setText("hel");
-  // delay(1000);
-  // nex_prev_velocity.setText("hell");
-  // nex_prev_angle.setValue(35);
-
   // Illuminate each LED to make sure that they're working properly.  
-  // RGB_Check();
+  RGB_Check();
+
+
+
   // // Red.
   // digitalWrite(VelocityLED, HIGH);
   // digitalWrite(DeadLED, HIGH);
@@ -302,28 +274,29 @@ void loop() {
     // if (!resetVelocity)
     // {
       startTime = micros();
+      falseReadingCheck = startTime;
       // while (!eTrigger) // Wait for the end laser to be triggered.
       while (!digitalRead(EndReceiver))
       {
         // // Serial.println("end read");
-
-        falseReadingCheck = micros();
         if ((falseReadingCheck - startTime) > falseReadingDelay) 
         {
           resetVelocity = true;
           Serial.println("Reset");
           break;
         }
+        falseReadingCheck = micros();
       }
+
+    if (!resetVelocity)
+    {
       // Wait for the projectile to fully pass the laser.
       while (digitalRead(EndReceiver));
       endTime = micros();
 
-    // }
-      
-    if (!resetVelocity)
-    {
-      
+    
+      // LED to show status.
+      SetVelocityLED();
       // Calculate the velocity.
       totalTime = endTime - startTime;
       float MpS = (float)LaserDistance / (float)totalTime;
@@ -353,7 +326,7 @@ void loop() {
       nex_prev_pressure.setValue(cleanPressure);
       nex_prev_angle.setValue(angle);
 
-      
+
       delay(5000);  // wait 5 seconds after launch
       SetIdleReadings();
       //continue;
@@ -363,7 +336,11 @@ void loop() {
       // At this point the projectile has potentially timed out.
 
       // If there is any pressure in the system still, the cannon didn't fire.
-      if (map(analogRead(pressureIn), 80, 400, 0, 100) > 2){ continue; }
+      if (map(analogRead(pressureIn), 80, 400, 0, 100) > 2)
+      { 
+        resetVelocity = false;  
+        continue; 
+      }
       Serial.println("Velocity Failed");
       Serial.print("Start Trigger: ");
       Serial.println(sTrigger);
