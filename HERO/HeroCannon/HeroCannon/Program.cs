@@ -23,18 +23,21 @@ namespace HERO_XInput_Gampad_Example
         long solenoidPeriod; //Time to auto-shutdown solenoid valve after shooting/opening it.
 
         // LED outputs for cannon state.
+        // These two bools make the code easier to read for the LED outputs.
+        public static readonly bool LEDOn = false;
+        public static readonly bool LEDOff = true;
+
         // Note that the RGB LED is common anode so each color is active low.
-        OutputPort PressureLED = new OutputPort(CTRE.HERO.IO.Port3.Pin3, true); // Green
-        OutputPort AngleLED = new OutputPort(CTRE.HERO.IO.Port3.Pin4, true);    // Red
-        OutputPort FireLED = new OutputPort(CTRE.HERO.IO.Port3.Pin5, true);    // Blue
+        OutputPort PressureLED = new OutputPort(CTRE.HERO.IO.Port3.Pin3, LEDOff); // Green
+        OutputPort AngleLED = new OutputPort(CTRE.HERO.IO.Port3.Pin4, LEDOff);    // Red
+        OutputPort BoostLED = new OutputPort(CTRE.HERO.IO.Port3.Pin5, LEDOff);    // Blue
 
-        OutputPort SpeedLED = new OutputPort(CTRE.HERO.IO.Port3.Pin6, true); 
-
+        // Serial communication with the arduino.
         SerialPort arduinoComm = new SerialPort(CTRE.HERO.IO.Port6.UART, 9600);
         static byte[] arduinoCommBuffer = new byte[2];
         bool sentToArduino = false;
 
-        // Talon SRX drive value
+        // Talon SRX drive values
         double Drive_Value = 0.5;
         double Boost_Value = 0.6;
         bool boost;
@@ -46,6 +49,8 @@ namespace HERO_XInput_Gampad_Example
 
         /// <summary>
         /// The maximum pressure that should be allowed. 
+        /// This value has been calculate to be around 80 psi
+        /// as the threshold.
         /// </summary>
         double Pressure_Threshold_Value = 0.50;
 
@@ -58,16 +63,6 @@ namespace HERO_XInput_Gampad_Example
         /// The uart timeout if not able to send or receive by the require time in milliseconds.
         /// </summary>
         readonly int uartTimeoutInMs = 100;
-
-        /// <summary>
-        /// The value if the Y button is pressed to fire the projectile.
-        /// </summary>
-        bool FIRE = false;
-
-        /// <summary>
-        /// The value of the deadman switch to allow firing or not.
-        /// </summary>
-        bool Deadman_Switch = false;
 
 
         // Actuator active for only 5 seconds.
@@ -96,10 +91,6 @@ namespace HERO_XInput_Gampad_Example
                 if (_gamepad.GetConnectionStatus() == UsbDeviceConnection.Connected)
                 {
                     CTRE.Phoenix.Watchdog.Feed();
-                    if(!SolenoidTimer)
-                    {
-                        FireLED.Write(true);
-                    }
                 }
                 else
                 {
@@ -108,7 +99,7 @@ namespace HERO_XInput_Gampad_Example
                     {
                         PressureLED.Write(!PressureLED.Read());
                         AngleLED.Write(!AngleLED.Read());
-                        FireLED.Write(!FireLED.Read());
+                        BoostLED.Write(!BoostLED.Read());
                     }
                     Debug.Print("Not connected: " + i); //The controller is not connected
                 }
@@ -146,14 +137,14 @@ namespace HERO_XInput_Gampad_Example
 
                 if(actuatorOn)
                 {
-                    AngleLED.Write(false);
+                    AngleLED.Write(LEDOn);
                     actuatorTime = DateTime.Now.Ticks;
                     if (actuatorTime > actuatorTimeout)
                     {
                         digitalOut1.Write(false);
                         digitalOut2.Write(false);
                         actuatorOn = false;
-                        AngleLED.Write(true);
+                        AngleLED.Write(LEDOff);
                     }
                 }
                 else 
@@ -161,36 +152,27 @@ namespace HERO_XInput_Gampad_Example
                     if (_gamepad.GetConnectionStatus() == UsbDeviceConnection.Connected)
                     {
                         // Turn off the angle LED if on.
-                        AngleLED.Write(true);
+                        AngleLED.Write(LEDOff);
                     }
                 }
                 
 
                 //Pressure Sensor
-                //Boolean Pressure_Switch = inputPressure.Read(); //Input from Raspberry Pi
                 double pressure_value = analogPressure.Read();  // Pressure Value read from Analog Input (Port 1 Pin 4)
                 string pressure_string = pressure_value.ToString(); //Converted to string for debugging
-                String pressure = "Under threshold";
-              /*  if (Pressure_Switch)
-                {
-                    pressure = "Above threshold";
-                    _pcm.SetSolenoidOutput(1, false);	//Pressure is above threshold, turn off solenoid
-                }*/
-                Debug.Print("Pressure Value: " + pressure); //Print pressure value
+
+                Debug.Print("Pressure Value: " + pressure_string); //Print pressure value
 
                 //Compressor
-                Boolean StartCompressor = _gamepad.GetButton(10); //"START"-Button
-                // Boolean StopCompressor = _gamepad.GetButton(9); //"BACK"-Button
-                
-
-                if (StartCompressor)//&& (!Pressure_Switch)) //If pressure is below threshold and "START" is pressed
+                bool StartCompressor = _gamepad.GetButton(10); //"START"-Button
+                if (StartCompressor) 
                 {
                     
                     // Stop the compressor if over the threshold.
                     if (pressure_value > Pressure_Threshold_Value)
                     {
                         _pcm.SetSolenoidOutput(1, false);
-                        PressureLED.Write(true);   // Turn off pressure LED.
+                        PressureLED.Write(LEDOff);   // Turn off pressure LED.
                     }
                     else
                     {
@@ -200,9 +182,7 @@ namespace HERO_XInput_Gampad_Example
                         }
 
                         _pcm.SetSolenoidOutput(1, true); //Start compressor
-                        PressureLED.Write(false);   // Turn on pressure LED.
-                        Debug.Print("StartCompressor");
-                        Debug.Print(pressure_string);
+                        PressureLED.Write(LEDOn);   // Turn on pressure LED.
                     }
                 }
 
@@ -213,16 +193,16 @@ namespace HERO_XInput_Gampad_Example
 
                     if(_gamepad.GetConnectionStatus() == UsbDeviceConnection.Connected)
                     {
-                        PressureLED.Write(true);   // Turn off pressure LED only if the gamepad is connedted.
+                        PressureLED.Write(LEDOff);   // Turn off pressure LED only if the gamepad is connected.
                     }
                 }
 
 
 
 
-
-                FIRE = _gamepad.GetButton(4); //Y-Button
-                Deadman_Switch = inputDead.Read();
+                // Always make a new object here so that the are always initialized to false.
+                bool FIRE = _gamepad.GetButton(4); //Y-Button
+                bool Deadman_Switch = inputDead.Read();
                 if (FIRE && (Deadman_Switch)) //If Y and the deadman switch is pressed... 
                 {
                     if(!sentToArduino)
@@ -240,7 +220,6 @@ namespace HERO_XInput_Gampad_Example
 
 
                     _pcm.SetSolenoidOutput(0, true); //Open Solenoid/Fire ID = 0 for solenoid
-                    FireLED.Write(false);
                     solenoidPeriod = (500 * TimeSpan.TicksPerMillisecond) + DateTime.Now.Ticks; //Start timer for half a second
                     SolenoidTimer = true;
                 }
@@ -250,7 +229,6 @@ namespace HERO_XInput_Gampad_Example
                     if (nowSolenoid > solenoidPeriod) //If half a second has passed
                     {
                         _pcm.SetSolenoidOutput(0, false); //Close the solenoid
-                        FireLED.Write(true);
                         SolenoidTimer = false;
                         Debug.Print("Close Solenoid");
                     }
@@ -264,17 +242,23 @@ namespace HERO_XInput_Gampad_Example
                 bool RightForward = _gamepad.GetButton(8); //RT
 
      
-                bool fastMode = _gamepad.GetButton(11); // LS-Click
-                if (fastMode)
+                bool useBoost = _gamepad.GetButton(11); // LS-Click
+                if (_gamepad.GetConnectionStatus() == UsbDeviceConnection.Connected)
                 {
-                    boost = true;
-                    // Time for 2 seconds.
-                    BoostPeriod = (2 * TimeSpan.TicksPerSecond) + nowBoost;
-                    SpeedLED.Write(false);
-                }
-                else
-                {
-                    SpeedLED.Write(true);
+                    if (useBoost)
+                    {
+                        boost = true;
+                        // Time for 2 seconds.
+                        BoostPeriod = (2 * TimeSpan.TicksPerSecond) + nowBoost;
+                        BoostLED.Write(LEDOn);
+                    }
+                    else
+                    {
+                        if (!boost)
+                        {
+                            BoostLED.Write(LEDOff);
+                        }
+                    }
                 }
 
                 // Check if the higher speed mode should be disabled.
@@ -314,8 +298,6 @@ namespace HERO_XInput_Gampad_Example
                         RightY = (float)(-Boost_Value);
                     }
                 }
-
-                
 
                 tal1.Set(ControlMode.PercentOutput, LeftY * -1); //moving tal1 with LT & LB
                 tal2.Set(ControlMode.PercentOutput, RightY); //moving tal2 with RT & RB
